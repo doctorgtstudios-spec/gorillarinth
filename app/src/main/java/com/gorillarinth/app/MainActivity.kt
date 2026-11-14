@@ -2,6 +2,7 @@ package com.gorillarinth.app
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -46,17 +47,25 @@ class MainActivity : ComponentActivity() {
 private fun GorillaRinthApp() {
     var page by remember { mutableStateOf("Home") }
     var selectedTheme by remember { mutableStateOf(themes.first()) }
-    var dllName by remember { mutableStateOf<String?>(null) }
+    var archiveName by remember { mutableStateOf<String?>(null) }
     var pairingCode by remember { mutableStateOf("") }
     val context = LocalContext.current
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let {
-            val name = it.lastPathSegment?.substringAfterLast('/') ?: "Selected file"
-            if (name.endsWith(".dll", ignoreCase = true)) {
-                dllName = name
-                context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val name = context.contentResolver.query(
+                it, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            } ?: it.lastPathSegment?.substringAfterLast('/') ?: "Selected file"
+            if (name.endsWith(".zip", ignoreCase = true)) {
+                archiveName = name
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(
+                        it, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
             } else {
-                dllName = "Please select a .dll file"
+                archiveName = "Please select a .zip archive"
             }
         }
     }
@@ -126,7 +135,7 @@ private fun GorillaRinthApp() {
                             Text("Quick actions", color = fg, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                             Spacer(Modifier.height(12.dp))
                             ActionRow("Patch OBB", "Create a backup and prepare the game files", Icons.Filled.Build, selectedTheme.accent) { page = "Patcher" }
-                            ActionRow("Choose a DLL", dllName ?: "Select one mod file", Icons.Filled.FileOpen, selectedTheme.accent) { page = "Mods" }
+                            ActionRow("Choose a ZIP", archiveName ?: "Select one mod archive", Icons.Filled.FileOpen, selectedTheme.accent) { page = "Mods" }
                             ActionRow("Launch Gorilla Tag", "Available after a compatible loader is configured", Icons.Filled.PlayArrow, selectedTheme.accent) { }
                         }
                         Spacer(Modifier.height(12.dp))
@@ -134,21 +143,21 @@ private fun GorillaRinthApp() {
                     }
                     "Mods" -> {
                         Text("Your mods", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                        Text("One DLL per game session. No ZIP files.", color = muted)
+                        Text("One ZIP archive per game session.", color = muted)
                         Spacer(Modifier.height(18.dp))
                         CardBlock(panel, selectedTheme.accent) {
                             Icon(Icons.Filled.Extension, tint = selectedTheme.accent, contentDescription = null, modifier = Modifier.size(30.dp))
                             Spacer(Modifier.height(10.dp))
-                            Text("Select a DLL", color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Text("Choose a single .dll file from your device.", color = muted, fontSize = 13.sp)
+                            Text("Select a ZIP archive", color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text("Choose one .zip mod archive from your device.", color = muted, fontSize = 13.sp)
                             Spacer(Modifier.height(14.dp))
                             Button(onClick = { picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = selectedTheme.accent, contentColor = Color(0xFF171717))) {
-                                Icon(Icons.Filled.FileOpen, null); Spacer(Modifier.width(8.dp)); Text("Browse DLL files")
+                                Icon(Icons.Filled.FileOpen, null); Spacer(Modifier.width(8.dp)); Text("Browse ZIP archives")
                             }
-                            dllName?.let { Text("Selected: $it", color = if (it.endsWith(".dll", true)) selectedTheme.accent else Color(0xFFFF7777), modifier = Modifier.padding(top = 10.dp)) }
+                            archiveName?.let { Text("Selected: $it", color = if (it.endsWith(".zip", true)) selectedTheme.accent else Color(0xFFFF7777), modifier = Modifier.padding(top = 10.dp)) }
                         }
                         Spacer(Modifier.height(12.dp))
-                        Text("The app currently selects and remembers the file name only. Actual installation needs the compatible game-side loader and verified patch format.", color = muted, fontSize = 12.sp)
+                        Text("The app currently selects and remembers one ZIP archive. It does not extract or install the archive yet; that requires a verified package layout and compatible game-side loader.", color = muted, fontSize = 12.sp)
                     }
                     "Patcher" -> {
                         Text("OBB patcher", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
