@@ -153,13 +153,17 @@ class MainActivity : ComponentActivity() {
         val endpoint = pairingEndpoints.firstOrNull { it.port == port }
             ?: pairingEndpoints.firstOrNull()
             ?: error("Pairing port not detected. Open Wireless debugging > Pair device with pairing code, then wait a moment.")
-        runBlocking { Kadb.pair(endpoint.host, port, code) }
+        val actualPairPort = if (port in 1..65535) port else endpoint.port
+        runBlocking { Kadb.pair(endpoint.host, actualPairPort, code) }
         getSharedPreferences("device", MODE_PRIVATE).edit().putString("host", endpoint.host).apply()
 
-        val connectEndpoint = connectionEndpoints.firstOrNull {
-            it.host == endpoint.host && (requestedConnectPort == 0 || it.port == requestedConnectPort)
-        } ?: connectionEndpoints.firstOrNull {
-            requestedConnectPort == 0 || it.port == requestedConnectPort
+        var connectEndpoint: AdbEndpoint? = null
+        repeat(20) {
+            connectEndpoint = connectionEndpoints.firstOrNull {
+                it.host == endpoint.host && (requestedConnectPort == 0 || it.port == requestedConnectPort)
+            } ?: connectionEndpoints.firstOrNull { requestedConnectPort == 0 || it.port == requestedConnectPort }
+            if (connectEndpoint != null) return@repeat
+            Thread.sleep(250)
         }
         val connectPort = if (requestedConnectPort > 0) requestedConnectPort else
             connectEndpoint?.port ?: error("Pairing succeeded, but the ADB connection port was not discovered. Leave Wireless debugging enabled and retry Connect.")
