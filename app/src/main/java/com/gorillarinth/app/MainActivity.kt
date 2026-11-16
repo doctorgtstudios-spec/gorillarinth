@@ -292,7 +292,8 @@ class MainActivity : ComponentActivity() {
                 .put("version", manifest.optString("version", "unknown"))
                 .put("enabled", enabled)
                 .put("bytes", File(filesDir, "imported_mod").walkTopDown().filter { it.isFile }.sumOf { it.length() })
-                .put("added", System.currentTimeMillis())
+                .put("applied", getSharedPreferences("device", MODE_PRIVATE).getString("appliedModId", null) == id)
+                .put("added", getSharedPreferences("mods", MODE_PRIVATE).getLong("added:$id", 0L))
             library.put(mod)
         }
         val gameIntent = packageManager.getLaunchIntentForPackage("com.AnotherAxiom.GorillaTag")
@@ -306,21 +307,22 @@ class MainActivity : ComponentActivity() {
         val connected = adbClient?.connectionCheck() == true
         val baseFile = File(filesDir, "base_original.obb")
         val baseUsable = baseFile.exists() && baseFile.length() > 0L
-        val enabledMod = manifest?.let {
-            getSharedPreferences("mods", MODE_PRIVATE).getBoolean(it.optString("id", it.optString("name", "local-mod")), false)
-        } ?: false
+        val modId = manifest?.optString("id", manifest.optString("name", "local-mod"))
+        val enabledMod = modId != null && getSharedPreferences("mods", MODE_PRIVATE).getBoolean(modId, false)
+        val appliedModId = prefs.getString("appliedModId", null)
+        val pending = if (appliedModId == null) enabledMod else appliedModId != modId || !enabledMod
         return JSONObject()
             .put("library", library)
             .put("device", JSONObject().put("state", if (connected) "ready" else if (paired) "lost" else "none")
-                .put("paired", paired).put("autoReconnect", prefs.getBoolean("autoReconnect", false)).put("model", "Quest"))
+                .put("paired", paired).put("autoReconnect", prefs.getBoolean("autoReconnect", true)).put("model", "Quest"))
             .put("game", game)
             .put("base", JSONObject().put("usable", baseUsable).put("fromModded", File(filesDir, "base_patched.obb").exists())
                 .put("name", if (baseUsable) "Original Gorilla Tag OBB" else ""))
             .put("checks", JSONArray())
             .put("busy", JSONObject.NULL)
-            .put("appliedAt", JSONObject.NULL)
+            .put("appliedAt", if (appliedModId != null) prefs.getLong("appliedAt", 0L).takeIf { it > 0L } ?: JSONObject.NULL else JSONObject.NULL)
             .put("capacity", 0).put("used", 0)
-            .put("pending", false).put("canApply", connected && baseUsable && enabledMod)
+            .put("pending", pending).put("canApply", connected && baseUsable && pending)
             .put("version", "0.1.0")
     }
 
@@ -388,8 +390,13 @@ class MainActivity : ComponentActivity() {
                         complete(id, true, "true")
                     }
                     "remove" -> {
-                        File(filesDir, "imported_mod").deleteRecursively()
-                        getSharedPreferences("mods", MODE_PRIVATE).edit().clear().apply()
+                        val requestedId = args.optString(0)
+                        val manifest = readManifest()
+                        val actualId = manifest?.optString("id", manifest.optString("name", "local-mod"))
+                        if (actualId != null && requestedId == actualId) {
+                            File(filesDir, "imported_mod").deleteRecursively()
+                            getSharedPreferences("mods", MODE_PRIVATE).edit().remove(actualId).remove("added:$actualId").apply()
+                        }
                         complete(id, true, "true")
                     }
                     "setAutoReconnect" -> {
@@ -457,9 +464,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun readManifest(): JSONObject? {
+    private fun findManifestFile(): File? {
         val root = File(filesDir, "imported_mod")
-        val file = root.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) } ?: return null
+        if (!root.isDirectory) return null
+        return root.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) }
+    }
+
+    private fun readManifest(): JSONObject? {
+        val file = findManifestFile() ?: return null
         return runCatching { JSONObject(file.readText()) }.getOrNull()
     }
 }
