@@ -479,8 +479,8 @@ function openDetail(src, id) {
 $('detail').addEventListener('close', () => { detailRef = null; });
 
 const CREDITS = [
-  ['Stripes', 'Developer Of GorillaRinth'],
-  ['MeiMei', 'Made Most Mods On GorillaRinth, And Some Of The Features Were Taken From Patchbay, A PC Mod Loader'],
+  ['Stripes', 'Driftrinth developer and UI contributor'],
+  ['MeiMei', 'Driftrinth contributor and mod creator'],
   ['Claude', 'AI Coding Assistant'],
   ['Driftrinth', 'Original renderer, layout and UI source'],
 ];
