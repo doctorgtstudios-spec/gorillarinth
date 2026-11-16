@@ -171,7 +171,8 @@ function gameBuildActions() {
   const plan = S && S.qmodGameVersionMatch ? S.qmodGameVersionMatch : {};
   return `<div class="row wrap" style="margin-top:10px">
     ${plan.status === 'download' ? `<button class="btn primary" data-download-game-build="1">${ic('download')}Download exact required build</button>` : ''}
-    ${S && S.stagedApk ? '<button class="btn line" data-install-apk="1">Install downloaded APK</button>' : ''}
+    ${S && S.stagedApk ? '<button class="btn line" data-install-apk="1">Install downloaded APK</button><button class="btn primary" data-patch-apk="1">Patch APK with QuestLoader</button>' : ''}
+    ${S && S.patchedApk ? '<button class="btn line" data-uninstall-game="1">Uninstall official game (required)</button><button class="btn primary" data-install-patched-apk="1">Install patched Gorilla Tag</button>' : ''}
     <button class="btn line" data-meta-login="1">Sign in to Meta / get download token</button>
     <button class="btn line" data-import-apk="1">Import downloaded Gorilla Tag APK</button>
   </div>`;
@@ -759,6 +760,19 @@ document.addEventListener('click', async (e) => {
       const result = JSON.parse(await api.downloadMatchedApk());
       toast('Downloaded and verified Gorilla Tag ' + result.versionName + '. ' + (result.installerMessage || 'Android installer opened.'));
       await refresh(true);
+    }
+    else if (d.patchApk) {
+      const result = JSON.parse(await api.patchGameApk());
+      toast('QuestLoader patch built and signed (' + size(Number(result.size || 0)) + '). Uninstall the official game before installing the patched APK.');
+      await refresh(true);
+    }
+    else if (d.uninstallGame) {
+      await api.uninstallOfficialGame();
+      toast('Confirm uninstall in Android. Return here afterward to install the patched build.');
+    }
+    else if (d.installPatchedApk) {
+      await api.installPatchedApk();
+      toast('Android installer opened. Confirm installation of the patched Gorilla Tag APK.');
     }
     else if (d.installApk) {
       await api.installImportedApk();
