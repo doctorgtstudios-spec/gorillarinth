@@ -13,6 +13,12 @@ An Android companion and mod-management prototype for Gorilla Tag on Quest.
 - Launches and force-stops Gorilla Tag over ADB.
 - GitHub Actions builds a debug APK automatically.
 
+## Default QMOD provider
+
+The Mod store settings now default to the GitHub repository [visionnvoiod/Quest-Mods](https://github.com/visionnvoiod/Quest-Mods). The provider URL is saved in GorillaRinth's Android app preferences and can be changed to another HTTPS provider.
+
+**Important:** this commit wires the repository URL into provider configuration only. GitHub repository listing, QMOD download, and install from the provider are not yet implemented; use **Upload mods** to import a QMOD archive in this build.
+
 ## Meta sign-in for Gorilla Tag APK downloads
 
 ## Automatic QMOD game-version matching and APK download
