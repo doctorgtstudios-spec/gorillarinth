@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
             addJavascriptInterface(NativeBridge(), "GorillaRinthNative")
         }
         setContentView(web)
-        web.loadUrl("file:///android_asset/driftrinth/index.html")
+        web.loadUrl("file:///android_asset/gorillarinth/index.html")
     }
 
     private fun complete(id: Int, ok: Boolean, value: String) {
