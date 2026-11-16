@@ -3,7 +3,7 @@
 (() => {
   const MODES = { dark: 'Dark', light: 'Light', oled: 'OLED' };
   const THEMES = {
-    blue: { name: 'Blue', hue: 215 }, cyan: { name: 'Cyan', hue: 190 }, purple: { name: 'Purple', hue: 270 },
+    yellow: { name: 'Yellow', hue: 45 }, blue: { name: 'Blue', hue: 215 }, cyan: { name: 'Cyan', hue: 190 }, purple: { name: 'Purple', hue: 270 },
     pink: { name: 'Pink', hue: 325 }, red: { name: 'Red', hue: 350 }, orange: { name: 'Orange', hue: 28 }, green: { name: 'Green', hue: 145 },
     rgb: { name: 'RGB', hue: 215 },
   };
@@ -17,12 +17,12 @@
     const part = (n) => { const k = (n + h / 30) % 12; const v = l / 100 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); return Math.round(v * 255).toString(16).padStart(2, '0'); };
     return `#${part(0)}${part(8)}${part(4)}`;
   };
-  let mode = load('driftrinth.mode', 'dark', MODES);
-  let theme = load('driftrinth.theme', 'blue', THEMES);
+  let mode = load('gorillarinth.mode', 'dark', MODES);
+  let theme = load('gorillarinth.theme', 'yellow', THEMES);
   root.dataset.mode = mode;
   root.dataset.theme = theme;
   // RGB drifts through every colour, once a minute by default. Each step restyles the page, so it takes 10 steps a second and only runs while visible.
-  const loadSpeed = () => { try { const v = Number(localStorage.getItem('driftrinth.rgbSpeed')); return v >= 1 && v <= 36 ? v : 6; } catch (e) { return 6; } };
+  const loadSpeed = () => { try { const v = Number(localStorage.getItem('gorillarinth.rgbSpeed')); return v >= 1 && v <= 36 ? v : 6; } catch (e) { return 6; } };
   let rgbSpeed = loadSpeed(); // degrees of hue per second
   let rgbHue = 215, rgbTimer = 0;
   const syncRgb = () => {
@@ -37,9 +37,9 @@
     get mode() { return mode; },
     get theme() { return theme; },
     get rgbSpeed() { return rgbSpeed; },
-    setRgbSpeed(v) { if (v >= 1 && v <= 36) { rgbSpeed = v; save('driftrinth.rgbSpeed', String(v)); } },
-    setMode(v) { if (MODES[v]) { mode = v; root.dataset.mode = v; save('driftrinth.mode', v); } },
-    setTheme(v) { if (THEMES[v]) { theme = v; root.dataset.theme = v; save('driftrinth.theme', v); syncRgb(); } },
+    setRgbSpeed(v) { if (v >= 1 && v <= 36) { rgbSpeed = v; save('gorillarinth.rgbSpeed', String(v)); } },
+    setMode(v) { if (MODES[v]) { mode = v; root.dataset.mode = v; save('gorillarinth.mode', v); } },
+    setTheme(v) { if (THEMES[v]) { theme = v; root.dataset.theme = v; save('gorillarinth.theme', v); syncRgb(); } },
     // The seven colours of the liquid background, as shades of the current theme.
     pools() {
       const h = THEMES[theme].hue;
