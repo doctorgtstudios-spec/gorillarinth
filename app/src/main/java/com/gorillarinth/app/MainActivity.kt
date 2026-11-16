@@ -496,6 +496,24 @@ class MainActivity : ComponentActivity() {
                     .also { it.put("nativeLibraries", JSONArray(labels)) }
                     .also { it.writeTo(File(temp, "manifest.json")) }
             }
+            // Inspect every native library before saving the imported mod.
+            if (nativeLibraries.isNotEmpty()) {
+                val reports = JSONArray()
+                nativeLibraries.forEach { reports.put(inspectNativeLibrary(it)) }
+                parsed.put("nativeLibraryInfo", reports)
+                val abiCompatible = (0 until reports.length()).all { index ->
+                    reports.optJSONObject(index)?.optBoolean("deviceAbiSupported", false) == true
+                }
+                parsed.put("nativeAbiCompatible", abiCompatible)
+                val unityVersion = installedGorillaTagUnityVersion()
+                if (unityVersion != null) parsed.put("installedGameUnityVersion", unityVersion)
+                val note = if (abiCompatible) "ELF architecture matches this device." else
+                    "One or more libraries do not match this device's supported ABI."
+                parsed.put("nativeCompatibilityNote", "$note Unity/game API compatibility and a native loader are still required.")
+                val oldDescription = parsed.optString("description")
+                parsed.put("description", (oldDescription.takeIf { it.isNotBlank() }?.plus(" ") ?: "") +
+                    "Native inspection: $note")
+            }
             // Align declared Unity metadata with the Unity version actually shipped in the installed Gorilla Tag build.
             installedGorillaTagUnityVersion()?.let { gameUnityVersion ->
                 listOf("unityVersion", "unity_version", "unity").forEach { key ->
@@ -525,6 +543,52 @@ class MainActivity : ComponentActivity() {
             temp.deleteRecursively()
             false to (e.message ?: "Import failed.")
         }
+    }
+
+    private fun inspectNativeLibrary(file: File): JSONObject {
+        val bytes = file.inputStream().use { input ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            var total = 0
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                total += n
+                require(total <= 64 * 1024 * 1024) { "Native library is too large to inspect (64 MB limit)." }
+                output.write(buffer, 0, n)
+            }
+            output.toByteArray()
+        }
+        val validElf = bytes.size >= 20 && bytes[0] == 0x7f.toByte() &&
+            bytes[1] == 0x45.toByte() && bytes[2] == 0x4c.toByte() && bytes[3] == 0x46.toByte()
+        if (!validElf) return JSONObject()
+            .put("file", file.name).put("isElf", false)
+            .put("deviceAbiSupported", false).put("error", "Not a valid ELF shared library.")
+        val elfClass = bytes[4].toInt() and 0xff
+        val littleEndian = (bytes[5].toInt() and 0xff) == 1
+        val machine = if (littleEndian) {
+            (bytes[18].toInt() and 0xff) or ((bytes[19].toInt() and 0xff) shl 8)
+        } else {
+            ((bytes[18].toInt() and 0xff) shl 8) or (bytes[19].toInt() and 0xff)
+        }
+        val abi = when (machine) {
+            183 -> if (elfClass == 2) "arm64-v8a" else "unknown-arm"
+            40 -> "armeabi-v7a"
+            62 -> "x86_64"
+            3 -> "x86"
+            else -> "unknown"
+        }
+        val printable = String(bytes, Charsets.ISO_8859_1)
+        val dependencies = Regex("lib[A-Za-z0-9_.+-]+\\.so")
+            .findAll(printable).map { it.value }.distinct().toList()
+        val supported = abi in android.os.Build.SUPPORTED_ABIS
+        return JSONObject()
+            .put("file", file.name).put("isElf", true)
+            .put("elfClass", if (elfClass == 2) "64-bit" else if (elfClass == 1) "32-bit" else "unknown")
+            .put("machine", machine).put("abi", abi)
+            .put("deviceAbiSupported", supported)
+            .put("unityNative", dependencies.any { it == "libunity.so" || it == "libil2cpp.so" })
+            .put("dependencies", JSONArray(dependencies))
     }
 
     private fun installedGorillaTagUnityVersion(): String? {
