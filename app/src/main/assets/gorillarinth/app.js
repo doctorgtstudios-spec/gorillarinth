@@ -707,7 +707,7 @@ async function upload() {
       const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
       const match = result.gameVersionMatch || {};
       toast(match.status === 'download'
-        ? `Added ${result.name}. This QMOD requires Gorilla Tag ${match.targetVersion}; opening its exact Meta build page.`
+        ? `Added ${result.name}. This QMOD requires Gorilla Tag ${match.targetVersion}; tap Download exact required build to fetch it from Meta.`
         : match.status === 'already-installed'
           ? `Added ${result.name}. Your installed Gorilla Tag version already matches.`
           : match.status === 'not-found'
