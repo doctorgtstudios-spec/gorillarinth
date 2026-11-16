@@ -474,4 +474,4 @@ dialog::backdrop { background: var(--scrim-plain); }
 }
 
 .game-glyph{display:grid;place-items:center;font-weight:800;letter-spacing:-2px;color:#dceaff;background:linear-gradient(145deg,#315b8b,#1b2b40);border-radius:14px;}
-.rail-btn.game .game-mark{font-size:11px;font-weight:800;color:#dceaff;}
+.rail-btn.game .game-mark{width:25px;height:25px;object-fit:contain;display:block;}
