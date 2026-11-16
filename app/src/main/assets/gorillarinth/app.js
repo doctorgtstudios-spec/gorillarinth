@@ -704,9 +704,9 @@ async function showOculusVersions() {
     }).join('');
     body.innerHTML = '<div class="modal-head"><h2>Gorilla Tag versions</h2><button class="round" data-close="detail" aria-label="Close"></button></div>' +
       '<p class="muted">Source: OculusDB · ' + versions.length + ' downloadable version entries</p>' +
-      '<div class="row" style="margin:12px 0"><button class="btn line" data-meta-login="1">Sign in with Meta</button></div>' +
+      '<div class="row" style="margin:12px 0;gap:8px;flex-wrap:wrap"><button class="btn line" data-meta-login="1">Sign in with Meta</button><button class="btn primary" data-import-apk="1">Import downloaded APK</button></div>' +
       (rows ? '<div class="list">' + rows + '</div>' : '<div class="empty">OculusDB returned no downloadable Gorilla Tag versions.</div>') +
-      '<p class="muted" style="margin-top:14px">Sign-in opens Meta in your browser. After signing in with the account that owns Gorilla Tag, return here and choose Open download. GorillaRinth never sees or stores your Meta password or browser session.</p>';
+      '<p class="muted" style="margin-top:14px">1. Sign in with the account that owns Gorilla Tag. 2. Choose Open download for a version. 3. When the browser finishes downloading, return here and choose Import downloaded APK. GorillaRinth checks that the file is a valid Gorilla Tag APK. Your Meta password and browser session stay with Meta.</p>';
   } catch (err) {
     body.innerHTML = '<div class="modal-head"><h2>OculusDB unavailable</h2><button class="round" data-close="detail" aria-label="Close"></button></div><p class="err">' + esc(clean(err)) + '</p><button class="btn" data-oculus="1">Try again</button>';
   }
@@ -753,9 +753,17 @@ document.addEventListener('click', async (e) => {
     else if (d.oculus) await showOculusVersions();
     else if (d.metaLogin) {
       await api.openMetaLogin();
-      toast('Meta sign-in opened in your browser. After signing in, return and choose Open download.');
+      toast('Meta sign-in opened in your browser. Return here after signing in.');
     }
-    else if (d.oculusVersion) { $('detail').close(); await api.openOculusVersion(el.dataset.appId, d.oculusVersion); }
+    else if (d.importApk) {
+      const result = JSON.parse(await api.importDownloadedApk());
+      toast('Verified Gorilla Tag ' + result.versionName + ' APK (' + size(Number(result.size || 0)) + ') imported. APK patching is not enabled yet.');
+    }
+    else if (d.oculusVersion) {
+      $('detail').close();
+      await api.openOculusVersion(el.dataset.appId, d.oculusVersion);
+      toast('Meta download page opened. After downloading, return to APK versions and import the APK.');
+    }
     else if (d.pair) openPair();
     else if (d.reconnect) { el.disabled = true; if (!(await api.reconnect())) toast('Still not connected. Check that Wireless debugging is on.'); await refresh(true); }
     else if (d.autore) { await api.setAutoReconnect(el.getAttribute('aria-checked') !== 'true'); await refresh(true); }
