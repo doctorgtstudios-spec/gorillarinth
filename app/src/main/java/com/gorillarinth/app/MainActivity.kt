@@ -101,7 +101,6 @@ class MainActivity : ComponentActivity() {
                         JSONObject(getSharedPreferences("qmod", MODE_PRIVATE).getString("lastGameVersionMatch", "{}") ?: "{}")
                     }.getOrDefault(JSONObject())
                     complete(id, true, JSONObject().put("name", result.second).put("gameVersionMatch", plan).toString())
-                    openPendingQmodBuild(plan)
                 } else complete(id, false, result.second)
             }
         }.start()
