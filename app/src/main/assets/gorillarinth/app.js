@@ -493,7 +493,7 @@ function renderSettings() {
   }
   const d = S.device, el = $('settings-body');
   if (settingsTab === 'connection') {
-    setHtml(el, `<section><h3>Reconnect automatically</h3><div class="opt"><p>Saves your automatic-reconnect preference. Automatic Wireless debugging and reconnect support is not available in this build yet.</p><button class="switch" role="switch" aria-checked="${d.autoReconnect}" data-autore="1" aria-label="Reconnect automatically"></button></div></section>
+    setHtml(el, `<section><h3>Reconnect automatically</h3><div class="opt"><p>Automatically reconnects to this Quest when Wireless debugging is available on the same Wi-Fi network.</p><button class="switch" role="switch" aria-checked="${d.autoReconnect}" data-autore="1" aria-label="Reconnect automatically"></button></div></section>
       <section><h3>Headset</h3><p>${d.state === 'ready' ? 'Connected to ' + esc(d.model) + '.' : 'Not connected right now.'}</p><div class="row">${d.state !== 'ready' ? '<button class="btn primary small" data-reconnect="1">Reconnect</button>' : ''}<button class="btn line small" data-pair="1">${d.paired ? 'Pair again' : 'Pair headset'}</button></div></section>`);
   } else if (settingsTab === 'store') {
     if (!el.querySelector('#cdn-url')) {
@@ -673,7 +673,7 @@ $('pair-go').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Pairing…'; msg.hidden = true;
   try {
     await api.pair(Number($('pair-port').value), $('pair-code').value, Number($('pair-connect').value) || 0);
-    $('pair').close(); toast('Paired. GorillaRinth will reconnect by itself from now on.'); await refresh(true);
+    $('pair').close(); toast('Wireless ADB paired and connected.'); await refresh(true);
   } catch (err) { msg.textContent = clean(err); msg.hidden = false; }
   btn.disabled = false; btn.textContent = 'Pair';
 });
