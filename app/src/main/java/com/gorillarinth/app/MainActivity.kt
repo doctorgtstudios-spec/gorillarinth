@@ -627,23 +627,50 @@ class MainActivity : ComponentActivity() {
             if (!depDir.exists()) {
                 depDir.mkdirs()
                 val archive = File(depDir, "dependency.qmod")
-                val connection = java.net.URL(url).openConnection().apply {
-                    connectTimeout = 15000
-                    readTimeout = 30000
-                    setRequestProperty("User-Agent", "GorillaRinth/0.1")
+                // Older Gorilla Tag QMOD manifests often point to deleted RedBrumbler release URLs.
+                // Keep their original URLs first, then use verified community mirrors for these IDs.
+                val fallbackUrls = when (id.lowercase()) {
+                    "monkecodegen" -> listOf(
+                        "https://github.com/GalaxyOnVR/MonkeCodegen-and-Utils/releases/download/1.1.2/monkecodgen.qmod"
+                    )
+                    "monkecomputer" -> listOf(
+                        "https://raw.githubusercontent.com/GalaxyOnVR/MonkeComputer/main/MonkeComputer%20(5).qmod"
+                    )
+                    else -> emptyList()
                 }
-                connection.getInputStream().use { input ->
-                    archive.outputStream().use { output ->
-                        val buffer = ByteArray(8192)
-                        var total = 0L
-                        while (true) {
-                            val count = input.read(buffer)
-                            if (count < 0) break
-                            total += count
-                            require(total <= 128L * 1024 * 1024) { "Dependency " + id + " exceeds the 128 MB download limit." }
-                            output.write(buffer, 0, count)
+                val candidates = (listOf(url) + fallbackUrls).distinct()
+                var lastDownloadError: Exception? = null
+                var downloaded = false
+                for (candidate in candidates) {
+                    try {
+                        val connection = java.net.URL(candidate).openConnection().apply {
+                            connectTimeout = 15000
+                            readTimeout = 30000
+                            setRequestProperty("User-Agent", "GorillaRinth/0.1")
                         }
+                        connection.getInputStream().use { input ->
+                            archive.outputStream().use { output ->
+                                val buffer = ByteArray(8192)
+                                var total = 0L
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    total += count
+                                    require(total <= 128L * 1024 * 1024) { "Dependency " + id + " exceeds the 128 MB download limit." }
+                                    output.write(buffer, 0, count)
+                                }
+                            }
+                        }
+                        downloaded = true
+                        break
+                    } catch (e: Exception) {
+                        archive.delete()
+                        lastDownloadError = e
                     }
+                }
+                check(downloaded) {
+                    "Could not download dependency " + id + ". Checked the manifest URL and known mirrors. " +
+                        (lastDownloadError?.message ?: "")
                 }
                 val extracted = File(depDir, "contents").apply { mkdirs() }
                 ZipInputStream(archive.inputStream().buffered()).use { zip ->
