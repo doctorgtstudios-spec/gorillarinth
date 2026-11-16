@@ -172,7 +172,7 @@ function mountHome() {
     <h1 class="h">Jump in</h1>
     <div class="card jump" id="jump"></div>
     <div id="setup"></div>
-    <div class="section"><div class="row wrap"><div class="spacer"><h2 class="h">Game version</h2><p class="muted">Choose a Gorilla Tag build listed by OculusDB.</p></div><button class="btn line" data-oculus="1">Find APK on OculusDB</button></div><div id="oculus-status"></div></div>
+    <div class="section"><div class="card" style="padding:14px"><b>Automatic game-version matching</b><p class="muted" style="margin:6px 0 0">When you import a QMOD, GorillaRinth reads its <code>packageVersion</code>, checks the installed Gorilla Tag build, and looks up that exact build on OculusDB if needed. No manual version picker.</p><div class="row wrap" style="margin-top:10px"><button class="btn line" data-import-apk="1">Import downloaded Gorilla Tag APK</button></div></div></div>
     <div class="section">
       <h1 class="h">Library</h1>
       <div class="toolbar" style="margin-top:0">
@@ -207,7 +207,7 @@ function mountGame() {
     </div>
     ${tab === 'content' ? `
     <div id="issues"></div>
-    <div class="card" style="padding:16px;margin:12px 0"><div class="row wrap"><div class="spacer"><b>Gorilla Tag APK versions</b><small class="muted">Version history from OculusDB</small></div><button class="btn line" data-oculus="1">Choose version</button></div><div id="oculus-status"></div></div>
+    <div class="card" style="padding:16px;margin:12px 0"><b>Automatic QMOD compatibility</b><p class="muted" style="margin:6px 0 0">Upload a QMOD to match its declared Gorilla Tag packageVersion. GorillaRinth opens the exact Meta build page when your installed game does not match.</p><button class="btn line" style="margin-top:10px" data-import-apk="1">Import downloaded Gorilla Tag APK</button></div>
     <div class="toolbar">
       <div class="search">${ic('search')}<input id="lib-q" type="search" placeholder="Search mods" value="${esc(lib.q)}" autocomplete="off"></div>
       <button class="btn line" data-upload="1">${ic('folder')}Upload mods</button>
@@ -713,8 +713,23 @@ async function showOculusVersions() {
 }
 async function upload() {
   try {
-    const r = await api.installLocal();
-    if (r) { toast(`Added ${r.name}. Switch it on to use it.`); if (route.name !== 'game' && route.name !== 'setup') go({ name: 'game' }); }
+    const raw = await api.installLocal();
+    if (raw) {
+      const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const match = result.gameVersionMatch || {};
+      toast(match.status === 'download'
+        ? `Added ${result.name}. This QMOD requires Gorilla Tag ${match.targetVersion}; opening its exact Meta build page.`
+        : match.status === 'already-installed'
+          ? `Added ${result.name}. Your installed Gorilla Tag version already matches.`
+          : match.status === 'not-found'
+            ? `Added ${result.name}, but OculusDB has no downloadable build matching ${match.targetVersion}.`
+            : match.status === 'lookup-failed'
+              ? `Added ${result.name}. Could not check OculusDB: ${match.message || 'try again later'}`
+              : match.status === 'not-gorilla-tag'
+                ? `Added ${result.name}. ${match.message}`
+                : `Added ${result.name}. ${match.message || 'No specific Gorilla Tag version was declared.'}`);
+      if (route.name !== 'game' && route.name !== 'setup') go({ name: 'game' });
+    }
     await refresh(true);
   } catch (err) { fail(err); }
 }
@@ -750,19 +765,9 @@ document.addEventListener('click', async (e) => {
     else if (d.setmode) { window.appearance.setMode(d.setmode); renderSettings(); }
     else if (d.settheme) { window.appearance.setTheme(d.settheme); aura.paint(); renderSettings(); }
     else if (d.upload) await upload();
-    else if (d.oculus) await showOculusVersions();
-    else if (d.metaLogin) {
-      await api.openMetaLogin();
-      toast('Meta sign-in opened in your browser. Return here after signing in.');
-    }
     else if (d.importApk) {
       const result = JSON.parse(await api.importDownloadedApk());
-      toast('Verified Gorilla Tag ' + result.versionName + ' APK (' + size(Number(result.size || 0)) + ') imported. APK patching is not enabled yet.');
-    }
-    else if (d.oculusVersion) {
-      $('detail').close();
-      await api.openOculusVersion(el.dataset.appId, d.oculusVersion);
-      toast('Meta download page opened. After downloading, return to APK versions and import the APK.');
+      toast('Verified Gorilla Tag ' + result.versionName + ' APK (' + size(Number(result.size || 0)) + ') imported. Installation still requires the Android package installer.');
     }
     else if (d.pair) openPair();
     else if (d.reconnect) { el.disabled = true; if (!(await api.reconnect())) toast('Still not connected. Check that Wireless debugging is on.'); await refresh(true); }
