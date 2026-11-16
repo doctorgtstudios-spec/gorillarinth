@@ -689,28 +689,6 @@ async function runApply() {
   } catch (err) { fail(err); }
   applyProg = null; task = null; await refresh(true);
 }
-async function showOculusVersions() {
-  const body = $('detail-body');
-  body.innerHTML = '<div class="modal-head"><h2>OculusDB versions</h2><button class="round" data-close="detail" aria-label="Close"></button></div><p class="muted">Loading Gorilla Tag versions…</p>';
-  $('detail').showModal();
-  try {
-    const result = JSON.parse(await api.oculusVersions());
-    const versions = result.versions || [];
-    const rows = versions.map(v => {
-      const date = v.uploadedDate ? new Date(v.uploadedDate).toLocaleDateString() : 'Date unavailable';
-      const bytes = Number(v.size || 0);
-      const sizeText = bytes > 0 ? (bytes / 1073741824).toFixed(2) + ' GB' : 'Size unavailable';
-      return '<div class="tr"><div class="proj"><span class="x"><b>' + esc(v.version || ('Build ' + v.versionCode)) + '</b><small>' + esc(date) + ' · ' + esc(sizeText) + '</small></span></div><button class="btn primary small" data-oculus-version="' + esc(v.id) + '" data-app-id="' + esc(result.appId) + '">Open download</button></div>';
-    }).join('');
-    body.innerHTML = '<div class="modal-head"><h2>Gorilla Tag versions</h2><button class="round" data-close="detail" aria-label="Close"></button></div>' +
-      '<p class="muted">Source: OculusDB · ' + versions.length + ' downloadable version entries</p>' +
-      '<div class="row" style="margin:12px 0;gap:8px;flex-wrap:wrap"><button class="btn line" data-meta-login="1">Sign in with Meta</button><button class="btn primary" data-import-apk="1">Import downloaded APK</button></div>' +
-      (rows ? '<div class="list">' + rows + '</div>' : '<div class="empty">OculusDB returned no downloadable Gorilla Tag versions.</div>') +
-      '<p class="muted" style="margin-top:14px">1. Sign in with the account that owns Gorilla Tag. 2. Choose Open download for a version. 3. When the browser finishes downloading, return here and choose Import downloaded APK. GorillaRinth checks that the file is a valid Gorilla Tag APK. Your Meta password and browser session stay with Meta.</p>';
-  } catch (err) {
-    body.innerHTML = '<div class="modal-head"><h2>OculusDB unavailable</h2><button class="round" data-close="detail" aria-label="Close"></button></div><p class="err">' + esc(clean(err)) + '</p><button class="btn" data-oculus="1">Try again</button>';
-  }
-}
 async function upload() {
   try {
     const raw = await api.installLocal();
