@@ -1,5 +1,5 @@
 'use strict';
-// window.driftrinth, backed by the Kotlin side.
+// GorillaRinth native bridge.
 (() => {
   let next = 1;
   const waiting = new Map();
@@ -16,7 +16,7 @@
     if (ok) w.resolve(value); else w.reject(new Error(value));
   };
   window.__drProgress = (p) => listeners.forEach((cb) => cb(p));
-  window.gorillarinth = window.driftrinth = {
+  window.gorillarinth = {
     state: () => call('state'),
     pair: (port, code, connectPort) => call('pair', port, code, connectPort),
     pairingPort: () => call('pairingPort'),
