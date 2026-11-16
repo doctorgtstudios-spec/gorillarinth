@@ -612,7 +612,7 @@ class MainActivity : ComponentActivity() {
         val input = EditText(this).apply {
             hint = "Oculus platform utility token"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            singleLine = true
+            isSingleLine = true
         }
         AlertDialog.Builder(this)
             .setTitle("Download matched Gorilla Tag build")
@@ -769,7 +769,7 @@ class MainActivity : ComponentActivity() {
                     "downloadMatchedApk" -> runOnUiThread { promptForMetaToken(id) }
                     "installImportedApk" -> onIo(id) { startPackageInstall(File(filesDir, "gorilla_tag_download.apk")) }
                     "patchGameApk" -> onIo(id) {
-                        val patched = QuestLoaderApkPatcher.patch(this, File(filesDir, "gorilla_tag_download.apk"))
+                        val patched = QuestLoaderApkPatcher.patch(this@MainActivity, File(filesDir, "gorilla_tag_download.apk"))
                         JSONObject().put("fileName", patched.name).put("size", patched.length()).toString()
                     }
                     "installPatchedApk" -> onIo(id) { startPackageInstall(File(filesDir, "gorilla_tag_patched.apk")) }
