@@ -41,6 +41,41 @@ class MainActivity : ComponentActivity() {
     private val adbScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pendingImportId: Int? = null
     private var importedManifest: JSONObject? = null
+    private var pendingApkImportId: Int? = null
+
+    // Kept separate from the existing OBB backup and mod archive import.
+    private val apkPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val id = pendingApkImportId ?: return@registerForActivityResult
+        pendingApkImportId = null
+        if (uri == null) {
+            complete(id, false, "APK import cancelled.")
+            return@registerForActivityResult
+        }
+        Thread {
+            try {
+                val staged = File(filesDir, "gorilla_tag_download.apk")
+                contentResolver.openInputStream(uri).use { input ->
+                    requireNotNull(input) { "Could not open the selected APK." }
+                    FileOutputStream(staged).use { output -> input.copyTo(output) }
+                }
+                val info = packageManager.getPackageArchiveInfo(staged.absolutePath, 0)
+                    ?: throw IllegalArgumentException("The selected file is not a valid Android APK.")
+                require(info.packageName == "com.AnotherAxiom.GorillaTag") {
+                    "This APK is for ${info.packageName}, not Gorilla Tag."
+                }
+                val result = JSONObject()
+                    .put("packageName", info.packageName)
+                    .put("versionName", info.versionName ?: "Unknown")
+                    .put("versionCode", if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong())
+                    .put("fileName", staged.name)
+                    .put("size", staged.length())
+                runOnUiThread { complete(id, true, result.toString()) }
+            } catch (e: Exception) {
+                File(filesDir, "gorilla_tag_download.apk").delete()
+                runOnUiThread { complete(id, false, e.message ?: "Could not import APK.") }
+            }
+        }.start()
+    }
 
     private val importPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val id = pendingImportId ?: return@registerForActivityResult
@@ -476,6 +511,10 @@ class MainActivity : ComponentActivity() {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://developer.oculus.com/manage/applications/" + appId + "/versions/" + versionId))
                         runOnUiThread { startActivity(intent) }
                         complete(id, true, "true")
+                    }
+                    "importDownloadedApk" -> runOnUiThread {
+                        pendingApkImportId = id
+                        apkPicker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream"))
                     }
                     "openMetaLogin" -> {
                         // Delegate authentication to Meta's official HTTPS sign-in page.
