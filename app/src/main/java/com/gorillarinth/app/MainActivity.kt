@@ -182,7 +182,6 @@ private fun GorillaRinthApp() {
                                 }
                             }
                         } else {
- {
                             CardBlock(panel, selectedTheme.accent) {
                                 Icon(Icons.Filled.Extension, tint = selectedTheme.accent, contentDescription = null, modifier = Modifier.size(30.dp))
                                 Spacer(Modifier.height(8.dp))
@@ -219,7 +218,7 @@ private fun GorillaRinthApp() {
                         }
 
                         Spacer(Modifier.height(8.dp))
-                        Text("Important: Modrinth is primarily a Minecraft project catalog, not a verified Gorilla Tag Quest mod repository. Search results are not confirmed compatible. The current official community Quest guide documents QuestPatcher on a computer; GorillaRinth cannot yet install or activate mods on standalone Quest by itself.", color = muted, fontSize = 11.sp)
+                        Text("The store will connect to the GorillaRinth server when its API is ready. Local archive inspection is available in Library.", color = muted, fontSize = 11.sp)
                     }
                     "Patcher" -> {
                         Text("OBB patcher", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
