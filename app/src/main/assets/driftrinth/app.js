@@ -1,5 +1,5 @@
 'use strict';
-const api = window.driftrinth;
+const api = window.gorillarinth;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const size = (n) => (n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
@@ -141,7 +141,7 @@ function setupCard() {
   const devText = dev ? 'Connected over wireless ADB.'
     : st === 'reconnecting' ? 'Reconnecting automatically…'
     : st === 'lost' ? 'Could not reconnect. Check that Wireless debugging is on.'
-    : 'One time only. Driftrinth reconnects on its own after this.';
+    : 'One time only. GorillaRinth reconnects on its own after this.';
   return `<div class="card setup">
     <div class="step ${dev ? 'done' : ''}"><span class="num">${dev ? ic('check') : st === 'reconnecting' ? '<span class="spin"></span>' : '1'}</span><div class="t"><b>Pair your headset</b><small>${devText}</small></div><div class="row">${a}</div></div>
     <div class="step ${S.base && S.base.usable ? 'done' : ''}"><span class="num">${S.base && S.base.usable ? ic('check') : '2'}</span><div class="t"><b>Save a clean copy of the game file</b><small>${S.base && S.base.usable ? esc(S.base.name) : pulling ? 'Copying. You can keep using the app.' : 'Mods are built from this copy, even if the game is already modded. It takes about 3 GB of space.'}</small>${pulling && task ? `<div class="bar"><i style="width:${Math.round(task.fraction * 100)}%"></i></div>` : ''}</div>${b}</div>
@@ -184,7 +184,7 @@ function mountHome() {
   </div>`;
 }
 function updateHome() {
-  setHtml($('jump'), `<div class="art"></div><img class="ic" src="orion-icon.png" alt=""><div><h2>Orion Drift</h2><div class="meta">${gameMeta()}</div>${playBtn(true)}</div>`);
+  setHtml($('jump'), `<div class="art"></div><img class="ic" src="orion-icon.png" alt=""><div><h2>Gorilla Tag</h2><div class="meta">${gameMeta()}</div>${playBtn(true)}</div>`);
   setHtml($('setup'), setupCard() || issueBanners());
   const l = libFiltered();
   setHtml($('home-grid'), l.length ? `<div class="grid">${l.map(tile).join('')}</div>`
@@ -195,7 +195,7 @@ function emptyLibrary() {
   return `<div class="empty">${ic('box').replace('class="i"', 'class="i big"')}<h3>No mods yet</h3><p>Upload a mod archive from this headset, or browse a mod store.</p></div>`;
 }
 
-// ---- Orion Drift ----------------------------------------------------------------
+// ---- Gorilla Tag ----------------------------------------------------------------
 function mountGame() {
   const tab = route.tab || 'content';
   return `<div class="inner">
@@ -237,7 +237,7 @@ function modRow(m) {
   </div>`;
 }
 function updateGame() {
-  setHtml($('game-head'), `<img class="ic" src="orion-icon.png" alt=""><div class="spacer"><h1>Orion Drift</h1><div class="meta">${gameMeta()}</div></div>${playBtn(false)}<button class="round" style="width:48px;height:48px" data-settings="game" aria-label="Game settings">${ic('gear')}</button>`);
+  setHtml($('game-head'), `<img class="ic" src="orion-icon.png" alt=""><div class="spacer"><h1>Gorilla Tag</h1><div class="meta">${gameMeta()}</div></div>${playBtn(false)}<button class="round" style="width:48px;height:48px" data-settings="game" aria-label="Game settings">${ic('gear')}</button>`);
   if ($('device-tab')) { setHtml($('device-tab'), deviceTab()); return; }
   setHtml($('issues'), issueBanners());
   const on = enabledMods().length, all = S.library.length;
@@ -352,12 +352,12 @@ let setupStep = 0;
 function setupSteps() {
   const base = !!(S.base && S.base.usable), mods = S.library.length, on = enabledMods().length;
   return [
-    { t: 'Find Orion Drift', s: 'Check the game is installed', done: !!S.game },
+    { t: 'Find Gorilla Tag', s: 'Check the game is installed', done: !!S.game },
     { t: 'Connect your headset', s: 'Pair once, then it is automatic', done: connected() },
     { t: 'Save the game file', s: 'The copy mods are built from', done: base },
     { t: 'Add your mods', s: 'Upload or browse', done: mods > 0, optional: true },
     { t: 'Apply your mods', s: 'Build them into the game', done: on > 0 && !S.pending, optional: true },
-    { t: 'Play', s: 'Launch Orion Drift', done: false },
+    { t: 'Play', s: 'Launch Gorilla Tag', done: false },
   ];
 }
 function mountSetup() {
@@ -370,12 +370,12 @@ const wizOk = (t) => `<div class="wiz-ok">${ic('check')}<span>${t}</span></div>`
 const wizWait = (t) => `<div class="wiz-wait"><span class="spin"></span><span>${t}</span></div>`;
 function setupBody(i) {
   const d = S.device, st = d.state, g = S.game, b = S.base;
-  if (i === 0) return `<h2>Find Orion Drift</h2><p>Driftrinth manages mods for the copy of Orion Drift on this headset.</p>`
-    + (g ? wizOk(`Orion Drift ${esc(g.versionName)} is installed.`) : wizWait('Install Orion Drift from the Meta Horizon Store. This page updates when it is ready.'));
+  if (i === 0) return `<h2>Find Gorilla Tag</h2><p>GorillaRinth manages mods for the copy of Gorilla Tag on this headset.</p>`
+    + (g ? wizOk(`Gorilla Tag ${esc(g.versionName)} is installed.`) : wizWait('Install Gorilla Tag from the Meta Horizon Store. This page updates when it is ready.'));
   if (i === 1) {
-    if (st === 'ready') return `<h2>Connect your headset</h2><p>Driftrinth uses wireless ADB on this headset to read and replace the game file.</p>${wizOk(`Connected to ${esc(d.model)}. It will reconnect by itself from now on.`)}`;
+    if (st === 'ready') return `<h2>Connect your headset</h2><p>GorillaRinth uses wireless ADB on this headset to read and replace the game file.</p>${wizOk(`Connected to ${esc(d.model)}. It will reconnect by itself from now on.`)}`;
     if (st === 'reconnecting') return `<h2>Connect your headset</h2><p>This headset is already paired, so there is nothing to type.</p>${wizWait('Reconnecting automatically…')}`;
-    if (st === 'lost') return `<h2>Connect your headset</h2><p>This headset is paired, but Driftrinth could not reach it. Check that Wireless debugging is on, then try again.</p><div class="row"><button class="btn primary" data-reconnect="1">Try again</button><button class="btn line" data-devset="1">Open Settings</button><button class="btn line" data-pair="1">Pair again</button></div>`;
+    if (st === 'lost') return `<h2>Connect your headset</h2><p>This headset is paired, but GorillaRinth could not reach it. Check that Wireless debugging is on, then try again.</p><div class="row"><button class="btn primary" data-reconnect="1">Try again</button><button class="btn line" data-devset="1">Open Settings</button><button class="btn line" data-pair="1">Pair again</button></div>`;
     return `<h2>Connect your headset</h2><p>You only do this once.</p><ol class="numbered">
       <li>Turn on <b>Developer Mode</b> for this headset in the Meta Horizon phone app.</li>
       <li>Open Settings, press <b>Open</b>, then go to <b>Developer options &gt; Wireless debugging</b> and turn it on.<br><button class="btn" data-devset="1">Open Settings</button></li>
@@ -384,7 +384,7 @@ function setupBody(i) {
   }
   if (i === 2) {
     const copying = S.busy === 'base';
-    const intro = '<h2>Save the game file</h2><p>Mods are built from a saved copy of the game file, which needs about 3 GB of free space. If the game is already modded, Driftrinth keeps those mods and adds them to your library.</p>';
+    const intro = '<h2>Save the game file</h2><p>Mods are built from a saved copy of the game file, which needs about 3 GB of free space. If the game is already modded, GorillaRinth keeps those mods and adds them to your library.</p>';
     if (b && b.usable) return intro + wizOk(`Saved ${esc(b.name)}.`);
     if (copying) return intro + wizWait('Copying the game file. This takes a minute or two.') + (task ? `<div class="bar wiz-bar"><i style="width:${Math.round(task.fraction * 100)}%"></i></div>` : '');
     return intro + `<div class="row">${connected() && g ? '<button class="btn primary" data-pull="1">Copy from this headset</button>' : '<button class="btn primary" disabled>Connect your headset first</button>'}<button class="btn line" data-choose="1">Choose a file</button></div>`;
@@ -402,10 +402,10 @@ function setupBody(i) {
     }
     if (!on.length) return intro + `<div class="wiz-wait">${ic('info')}<span>No mods are switched on, so there is nothing to apply.</span></div>`;
     if (!S.pending) return intro + wizOk(`${plural(on.length, 'mod')} in the game.`);
-    return intro + (S.canApply ? '' : `<div class="wiz-wait">${ic('info')}<span>${!connected() ? 'Waiting for the headset connection.' : !(b && b.usable) ? 'Save the game file first.' : S.busy ? 'Waiting for the current task to finish.' : 'There is a problem to fix on the Orion Drift page.'}</span></div>`)
+    return intro + (S.canApply ? '' : `<div class="wiz-wait">${ic('info')}<span>${!connected() ? 'Waiting for the headset connection.' : !(b && b.usable) ? 'Save the game file first.' : S.busy ? 'Waiting for the current task to finish.' : 'There is a problem to fix on the Gorilla Tag page.'}</span></div>`)
       + `<div class="row"><button class="btn primary" id="go"${S.canApply ? '' : ' disabled'}>Apply ${plural(on.length, 'mod')}</button></div>`;
   }
-  return `<h2>You're all set</h2><p>Press Play to launch Orion Drift. You can add more mods whenever you like: switch them on, press Apply, and your earlier mods stay in.</p><div class="row">${playBtn(true)}</div>`;
+  return `<h2>You're all set</h2><p>Press Play to launch Gorilla Tag. You can add more mods whenever you like: switch them on, press Apply, and your earlier mods stay in.</p><div class="row">${playBtn(true)}</div>`;
 }
 function updateSetup() {
   const steps = setupSteps();
@@ -427,11 +427,11 @@ function updateChrome() {
     : d.state === 'lost' ? `<button class="pill warn" data-reconnect="1"><span class="dot warn"></span>Reconnect</button>`
     : `<button class="pill warn" data-pair="1"><span class="dot warn"></span>Not paired</button>`;
   const run = g && g.running
-    ? `<span class="pill on"><span class="dot on"></span>Orion Drift running<button class="stop" data-stop="1" aria-label="Stop game">${ic('stop')}</button></span>`
+    ? `<span class="pill on"><span class="dot on"></span>Gorilla Tag running<button class="stop" data-stop="1" aria-label="Stop game">${ic('stop')}</button></span>`
     : '<span class="pill"><span class="dot"></span>Not running</span>';
   const copy = S.busy === 'base' && task ? `<span class="pill">${ic('download')}<span class="bar"><i style="width:${Math.round(task.fraction * 100)}%"></i></span></span>` : '';
   setHtml($('status'), copy + run + conn);
-  const crumbs = { home: `${ic('play')}Home`, discover: `${ic('compass')}Discover mods`, game: '<img src="orion-icon.png" alt="">Orion Drift', setup: `${ic('checks')}Setup` };
+  const crumbs = { home: `${ic('play')}Home`, discover: `${ic('compass')}Discover mods`, game: '<img src="orion-icon.png" alt="">Gorilla Tag', setup: `${ic('checks')}Setup` };
   setHtml($('crumb'), crumbs[route.name]);
   $('nav-back').disabled = !backStack.length; $('nav-fwd').disabled = !fwdStack.length;
   document.querySelectorAll('.rail-btn[data-go]').forEach((b) => b.classList.toggle('active', b.dataset.go === route.name));
@@ -479,11 +479,11 @@ function openDetail(src, id) {
 $('detail').addEventListener('close', () => { detailRef = null; });
 
 const CREDITS = [
-  ['Stripes', 'Developer Of Driftrinth'],
-  ['MeiMei', 'Made Most Mods On Driftrinth, And Some Of The Features Were Taken From Patchbay, A PC Mod Loader'],
+  ['Stripes', 'Developer Of GorillaRinth'],
+  ['MeiMei', 'Made Most Mods On GorillaRinth, And Some Of The Features Were Taken From Patchbay, A PC Mod Loader'],
   ['Claude', 'AI Coding Assistant'],
   ['Modrinth', 'UI Inspiration'],
-  ['Another Axiom', 'Orion Drift Creators (they suck)'],
+  ['GorillaRinth', 'Gorilla Tag Creators (they suck)'],
 ];
 // The slider's markup never changes, so background refreshes can't replace it while it is being dragged.
 function syncSpeedSlider() {
@@ -500,7 +500,7 @@ function renderSettings() {
   }
   const d = S.device, el = $('settings-body');
   if (settingsTab === 'connection') {
-    setHtml(el, `<section><h3>Reconnect automatically</h3><div class="opt"><p>After pairing once, Driftrinth turns Wireless debugging back on when it is off and reconnects by itself, including after a restart. This gives the app permission to change that one Android setting.</p><button class="switch" role="switch" aria-checked="${d.autoReconnect}" data-autore="1" aria-label="Reconnect automatically"></button></div></section>
+    setHtml(el, `<section><h3>Reconnect automatically</h3><div class="opt"><p>After pairing once, GorillaRinth turns Wireless debugging back on when it is off and reconnects by itself, including after a restart. This gives the app permission to change that one Android setting.</p><button class="switch" role="switch" aria-checked="${d.autoReconnect}" data-autore="1" aria-label="Reconnect automatically"></button></div></section>
       <section><h3>Headset</h3><p>${d.state === 'ready' ? 'Connected to ' + esc(d.model) + '.' : 'Not connected right now.'}</p><div class="row">${d.state !== 'ready' ? '<button class="btn primary small" data-reconnect="1">Reconnect</button>' : ''}<button class="btn line small" data-pair="1">${d.paired ? 'Pair again' : 'Pair headset'}</button></div></section>`);
   } else if (settingsTab === 'store') {
     if (!el.querySelector('#cdn-url')) {
@@ -511,7 +511,7 @@ function renderSettings() {
   } else if (settingsTab === 'game') {
     const can = connected() && S.base && S.base.usable && !S.busy;
     setHtml(el, `<section><h3>Remove all mods</h3><p>${S.base && S.base.fromModded ? 'Rebuilds the game file with no mods, using your saved copy.' : 'Puts your saved original game file back on the headset.'} Your library stays as it is.</p><div class="row"><button class="btn danger small" id="restore-base"${can ? '' : ' disabled'}>Remove all mods</button></div></section>
-      <section><h3>Installed game</h3><p>${S.game ? `Orion Drift ${esc(S.game.versionName)} (${esc(S.game.versionCode)})` : 'Orion Drift is not installed.'}</p></section>`);
+      <section><h3>Installed game</h3><p>${S.game ? `Gorilla Tag ${esc(S.game.versionName)} (${esc(S.game.versionCode)})` : 'Gorilla Tag is not installed.'}</p></section>`);
   } else if (settingsTab === 'appearance') {
     const A = window.appearance;
     const swatch = { blue: '#4f9cff', cyan: '#22d3ee', purple: '#c78aff', pink: '#ff7ab8', red: '#ff6984', orange: '#ffa347', green: '#1bd96a', rgb: 'conic-gradient(#ff3b3b, #ffd23b, #3bff6a, #3bd5ff, #5a3bff, #ff3bd5, #ff3b3b)' };
@@ -521,7 +521,7 @@ function renderSettings() {
   } else if (settingsTab === 'credits') {
     setHtml(el, `<section><h3>Credits</h3><div class="credits">${CREDITS.map(([n, r]) => `<div class="credit"><b>${esc(n)}</b><span>${esc(r)}</span></div>`).join('')}</div><p style="margin-top:14px">Font: Inter, under the SIL Open Font License.</p></section>`);
   } else {
-    setHtml(el, `<section><div class="about-mark">${MARK}Driftrinth</div><p>Version ${esc(S.version)}. A mod manager for Orion Drift that runs on the headset.</p><p>Not affiliated with Modrinth or Another Axiom.</p></section>`);
+    setHtml(el, `<section><div class="about-mark">${MARK}GorillaRinth</div><p>Version ${esc(S.version)}. A mod manager for Gorilla Tag that runs on the headset.</p><p>Not affiliated with Modrinth or GorillaRinth.</p></section>`);
   }
 }
 
@@ -682,7 +682,7 @@ $('pair-go').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Pairing…'; msg.hidden = true;
   try {
     await api.pair(Number($('pair-port').value), $('pair-code').value, Number($('pair-connect').value) || 0);
-    $('pair').close(); toast('Paired. Driftrinth will reconnect by itself from now on.'); await refresh(true);
+    $('pair').close(); toast('Paired. GorillaRinth will reconnect by itself from now on.'); await refresh(true);
   } catch (err) { msg.textContent = clean(err); msg.hidden = false; }
   btn.disabled = false; btn.textContent = 'Pair';
 });
