@@ -172,6 +172,7 @@ function mountHome() {
     <h1 class="h">Jump in</h1>
     <div class="card jump" id="jump"></div>
     <div id="setup"></div>
+    <div class="section"><div class="row wrap"><div class="spacer"><h2 class="h">Game version</h2><p class="muted">Choose a Gorilla Tag build listed by OculusDB.</p></div><button class="btn line" data-oculus="1">Find APK on OculusDB</button></div><div id="oculus-status"></div></div>
     <div class="section">
       <h1 class="h">Library</h1>
       <div class="toolbar" style="margin-top:0">
@@ -206,6 +207,7 @@ function mountGame() {
     </div>
     ${tab === 'content' ? `
     <div id="issues"></div>
+    <div class="card" style="padding:16px;margin:12px 0"><div class="row wrap"><div class="spacer"><b>Gorilla Tag APK versions</b><small class="muted">Version history from OculusDB</small></div><button class="btn line" data-oculus="1">Choose version</button></div><div id="oculus-status"></div></div>
     <div class="toolbar">
       <div class="search">${ic('search')}<input id="lib-q" type="search" placeholder="Search mods" value="${esc(lib.q)}" autocomplete="off"></div>
       <button class="btn line" data-upload="1">${ic('folder')}Upload mods</button>
@@ -687,6 +689,27 @@ async function runApply() {
   } catch (err) { fail(err); }
   applyProg = null; task = null; await refresh(true);
 }
+async function showOculusVersions() {
+  const body = $('detail-body');
+  body.innerHTML = '<div class="modal-head"><h2>OculusDB versions</h2><button class="round" data-close="detail" aria-label="Close"></button></div><p class="muted">Loading Gorilla Tag versions…</p>';
+  $('detail').showModal();
+  try {
+    const result = JSON.parse(await api.oculusVersions());
+    const versions = result.versions || [];
+    const rows = versions.map(v => {
+      const date = v.uploadedDate ? new Date(v.uploadedDate).toLocaleDateString() : 'Date unavailable';
+      const bytes = Number(v.size || 0);
+      const sizeText = bytes > 0 ? (bytes / 1073741824).toFixed(2) + ' GB' : 'Size unavailable';
+      return '<div class="tr"><div class="proj"><span class="x"><b>' + esc(v.version || ('Build ' + v.versionCode)) + '</b><small>' + esc(date) + ' · ' + esc(sizeText) + '</small></span></div><button class="btn primary small" data-oculus-version="' + esc(v.id) + '" data-app-id="' + esc(result.appId) + '">Open download</button></div>';
+    }).join('');
+    body.innerHTML = '<div class="modal-head"><h2>Gorilla Tag versions</h2><button class="round" data-close="detail" aria-label="Close"></button></div>' +
+      '<p class="muted">Source: OculusDB · ' + versions.length + ' downloadable version entries</p>' +
+      (rows ? '<div class="list">' + rows + '</div>' : '<div class="empty">OculusDB returned no downloadable Gorilla Tag versions.</div>') +
+      '<p class="muted" style="margin-top:14px">Meta may require sign-in with the account that owns Gorilla Tag before releasing the APK.</p>';
+  } catch (err) {
+    body.innerHTML = '<div class="modal-head"><h2>OculusDB unavailable</h2><button class="round" data-close="detail" aria-label="Close"></button></div><p class="err">' + esc(clean(err)) + '</p><button class="btn" data-oculus="1">Try again</button>';
+  }
+}
 async function upload() {
   try {
     const r = await api.installLocal();
@@ -726,6 +749,8 @@ document.addEventListener('click', async (e) => {
     else if (d.setmode) { window.appearance.setMode(d.setmode); renderSettings(); }
     else if (d.settheme) { window.appearance.setTheme(d.settheme); aura.paint(); renderSettings(); }
     else if (d.upload) await upload();
+    else if (d.oculus) await showOculusVersions();
+    else if (d.oculusVersion) { $('detail').close(); await api.openOculusVersion(el.dataset.appId, d.oculusVersion); }
     else if (d.pair) openPair();
     else if (d.reconnect) { el.disabled = true; if (!(await api.reconnect())) toast('Still not connected. Check that Wireless debugging is on.'); await refresh(true); }
     else if (d.autore) { await api.setAutoReconnect(el.getAttribute('aria-checked') !== 'true'); await refresh(true); }
