@@ -567,9 +567,7 @@ class MainActivity : ComponentActivity() {
                 val token = input.text?.toString()?.trim().orEmpty()
                 onIo(id) {
                     val result = JSONObject(downloadMatchedBuild(token))
-                    runOnUiThread { runCatching { startPackageInstall(File(filesDir, "gorilla_tag_download.apk")) }
-                        .onFailure { Toast.makeText(this, it.message ?: "Could not open installer.", Toast.LENGTH_LONG).show() } }
-                    result.put("installerStarted", true).toString()
+                    result.toString()
                 }
             }
             .setOnCancelListener { complete(id, false, "Download cancelled.") }
