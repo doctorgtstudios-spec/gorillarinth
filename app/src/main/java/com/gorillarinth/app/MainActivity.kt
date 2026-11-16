@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.pm.PackageInstaller
 import android.widget.EditText
 import android.text.InputType
+import android.provider.Settings
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.JavascriptInterface
@@ -517,6 +518,11 @@ class MainActivity : ComponentActivity() {
 
     private fun startPackageInstall(apk: File): String {
         require(apk.exists() && apk.length() > 0L) { "No downloaded Gorilla Tag APK is available." }
+        if (android.os.Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+            val settings = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
+            runOnUiThread { startActivity(settings) }
+            error("Allow GorillaRinth to install unknown apps in Android settings, then tap Install again.")
+        }
         val info = packageManager.getPackageArchiveInfo(apk.absolutePath, 0)
             ?: error("The staged file is not a valid APK.")
         require(info.packageName == "com.AnotherAxiom.GorillaTag") { "Only a Gorilla Tag APK can be installed here." }
