@@ -184,7 +184,7 @@ function mountHome() {
   </div>`;
 }
 function updateHome() {
-  setHtml($('jump'), `<div class="art"></div><img class="ic" src="orion-icon.png" alt=""><div><h2>Orion Drift</h2><div class="meta">${gameMeta()}</div>${playBtn(true)}</div>`);
+  setHtml($('jump'), `<div class="art"></div><div class="ic game-glyph">GT</div><div><h2>Orion Drift</h2><div class="meta">${gameMeta()}</div>${playBtn(true)}</div>`);
   setHtml($('setup'), setupCard() || issueBanners());
   const l = libFiltered();
   setHtml($('home-grid'), l.length ? `<div class="grid">${l.map(tile).join('')}</div>`
@@ -237,7 +237,7 @@ function modRow(m) {
   </div>`;
 }
 function updateGame() {
-  setHtml($('game-head'), `<img class="ic" src="orion-icon.png" alt=""><div class="spacer"><h1>Orion Drift</h1><div class="meta">${gameMeta()}</div></div>${playBtn(false)}<button class="round" style="width:48px;height:48px" data-settings="game" aria-label="Game settings">${ic('gear')}</button>`);
+  setHtml($('game-head'), `<div class="ic game-glyph">GT</div><div class="spacer"><h1>Orion Drift</h1><div class="meta">${gameMeta()}</div></div>${playBtn(false)}<button class="round" style="width:48px;height:48px" data-settings="game" aria-label="Game settings">${ic('gear')}</button>`);
   if ($('device-tab')) { setHtml($('device-tab'), deviceTab()); return; }
   setHtml($('issues'), issueBanners());
   const on = enabledMods().length, all = S.library.length;
