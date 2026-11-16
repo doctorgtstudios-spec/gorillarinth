@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
         val game = if (gameIntent == null) JSONObject.NULL else {
             val info = packageManager.getPackageInfo("com.AnotherAxiom.GorillaTag", 0)
             JSONObject().put("versionName", info.versionName ?: "Unknown")
-                .put("versionCode", info.longVersionCode).put("running", false)
+                .put("versionCode", info.versionCode.toLong()).put("running", false)
         }
         return JSONObject()
             .put("library", library)
