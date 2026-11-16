@@ -55,8 +55,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun complete(id: Int, ok: Boolean, value: String) {
-        val encoded = JSONObject.quote(value)
-        web.evaluateJavascript("window.__drDone($id, $ok, $encoded)", null)
+        val encoded = if (ok) value else JSONObject.quote(value)
+        runOnUiThread { web.evaluateJavascript("window.__drDone($id, $ok, $encoded)", null) }
     }
 
     private fun state(): JSONObject {
@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
             .put("version", "0.1.0")
     }
 
-    private inner class NativeBridge {
+    inner class NativeBridge {
         @JavascriptInterface
         fun call(id: Int, method: String, rawArgs: String) {
             try {
