@@ -867,12 +867,22 @@ class MainActivity : ComponentActivity() {
                         getSharedPreferences("device", MODE_PRIVATE).edit().putBoolean("autoReconnect", enabled).apply()
                         complete(id, true, enabled.toString())
                     }
-                    "storeConfig" -> complete(id, true, JSONObject().put("url", "").put("configured", false).toString())
-                    "storeSetUrl", "storeInstall" ->
-                        throw UnsupportedOperationException(when (method) {
-                            "storeSetUrl", "storeInstall" -> "The GorillaRinth server catalog is not connected yet."
-                            else -> "This game-management action is not implemented yet."
-                        })
+                    "storeConfig" -> {
+                        val prefs = getSharedPreferences("mod_store", MODE_PRIVATE)
+                        val fallback = "https://github.com/visionnvoiod/Quest-Mods"
+                        val url = prefs.getString("url", fallback) ?: fallback
+                        complete(id, true, JSONObject().put("url", url).put("fallback", fallback)
+                            .put("configured", url.isNotBlank()).toString())
+                    }
+                    "storeSetUrl" -> {
+                        val url = args.optString(0).trim()
+                        require(url.isBlank() || (url.startsWith("https://") && url.length <= 2048)) {
+                            "Provider must be a valid HTTPS URL."
+                        }
+                        getSharedPreferences("mod_store", MODE_PRIVATE).edit().putString("url", url).apply()
+                        complete(id, true, "true")
+                    }
+                    "storeInstall" -> throw UnsupportedOperationException("QMOD provider downloads are not connected yet.")
                     else -> throw IllegalArgumentException("Unsupported action: $method")
                 }
             } catch (e: Exception) {
