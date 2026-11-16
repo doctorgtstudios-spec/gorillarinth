@@ -704,8 +704,9 @@ async function showOculusVersions() {
     }).join('');
     body.innerHTML = '<div class="modal-head"><h2>Gorilla Tag versions</h2><button class="round" data-close="detail" aria-label="Close"></button></div>' +
       '<p class="muted">Source: OculusDB · ' + versions.length + ' downloadable version entries</p>' +
+      '<div class="row" style="margin:12px 0"><button class="btn line" data-meta-login="1">Sign in with Meta</button></div>' +
       (rows ? '<div class="list">' + rows + '</div>' : '<div class="empty">OculusDB returned no downloadable Gorilla Tag versions.</div>') +
-      '<p class="muted" style="margin-top:14px">Meta may require sign-in with the account that owns Gorilla Tag before releasing the APK.</p>';
+      '<p class="muted" style="margin-top:14px">Sign-in opens Meta in your browser. After signing in with the account that owns Gorilla Tag, return here and choose Open download. GorillaRinth never sees or stores your Meta password or browser session.</p>';
   } catch (err) {
     body.innerHTML = '<div class="modal-head"><h2>OculusDB unavailable</h2><button class="round" data-close="detail" aria-label="Close"></button></div><p class="err">' + esc(clean(err)) + '</p><button class="btn" data-oculus="1">Try again</button>';
   }
@@ -750,6 +751,10 @@ document.addEventListener('click', async (e) => {
     else if (d.settheme) { window.appearance.setTheme(d.settheme); aura.paint(); renderSettings(); }
     else if (d.upload) await upload();
     else if (d.oculus) await showOculusVersions();
+    else if (d.metaLogin) {
+      await api.openMetaLogin();
+      toast('Meta sign-in opened in your browser. After signing in, return and choose Open download.');
+    }
     else if (d.oculusVersion) { $('detail').close(); await api.openOculusVersion(el.dataset.appId, d.oculusVersion); }
     else if (d.pair) openPair();
     else if (d.reconnect) { el.disabled = true; if (!(await api.reconnect())) toast('Still not connected. Check that Wireless debugging is on.'); await refresh(true); }
