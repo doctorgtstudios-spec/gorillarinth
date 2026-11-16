@@ -8,6 +8,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import com.flyfishxu.kadb.Kadb
@@ -302,8 +303,9 @@ class MainActivity : ComponentActivity() {
                 .put("id", id)
                 .put("name", manifest.optString("name", "Imported mod"))
                 .put("creator", manifest.optString("author", "Unknown"))
-                .put("summary", "Imported locally • v" + manifest.optString("version", "unknown"))
+                .put("summary", manifest.optString("description", "Imported locally • v" + manifest.optString("version", "unknown")))
                 .put("version", manifest.optString("version", "unknown"))
+                .put("thumb", coverDataUri())
                 .put("enabled", enabled)
                 .put("bytes", File(filesDir, "imported_mod").walkTopDown().filter { it.isFile }.sumOf { it.length() })
                 .put("applied", getSharedPreferences("device", MODE_PRIVATE).getString("appliedModId", null) == id)
@@ -468,7 +470,8 @@ class MainActivity : ComponentActivity() {
                 }
             } ?: error("Could not read selected archive.")
             val modJson = temp.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) }
-                ?: error("Archive extracted, but no mod.json manifest was found.")
+                ?: temp.walkTopDown().firstOrNull { it.isFile && it.name.equals("manifest.json", true) }
+                ?: error("Archive extracted, but no mod.json or manifest.json was found.")
             val parsed = JSONObject(modJson.readText())
             val modName = parsed.optString("name").trim()
             require(modName.isNotEmpty()) { "The mod.json manifest must contain a name." }
@@ -498,6 +501,18 @@ class MainActivity : ComponentActivity() {
         val root = File(filesDir, "imported_mod")
         if (!root.isDirectory) return null
         return root.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) }
+            ?: root.walkTopDown().firstOrNull { it.isFile && it.name.equals("manifest.json", true) }
+    }
+
+    private fun coverDataUri(): String? {
+        val root = File(filesDir, "imported_mod")
+        val cover = root.walkTopDown().firstOrNull {
+            it.isFile && (it.name.equals("cover.png", true) || it.name.equals("cover.jpg", true) ||
+                it.name.equals("cover.jpeg", true))
+        } ?: return null
+        if (cover.length() <= 0L || cover.length() > 2L * 1024 * 1024) return null
+        val mime = if (cover.extension.equals("png", true)) "image/png" else "image/jpeg"
+        return "data:$mime;base64," + Base64.encodeToString(cover.readBytes(), Base64.NO_WRAP)
     }
 
     private fun readManifest(): JSONObject? {
