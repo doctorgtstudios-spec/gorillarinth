@@ -394,6 +394,73 @@ class MainActivity : ComponentActivity() {
             .put("version", "0.1.0")
     }
 
+    private fun fetchOculusVersions(): JSONObject {
+        fun getJson(path: String): JSONObject {
+            var last: Exception? = null
+            for (host in listOf("https://oculusdb-rewrite.rui2015.me", "https://oculusdb.rui2015.me")) {
+                try {
+                    val connection = java.net.URL(host + path).openConnection().apply {
+                        connectTimeout = 12000
+                        readTimeout = 20000
+                        setRequestProperty("User-Agent", "GorillaRinth/0.1")
+                        setRequestProperty("Accept", "application/json")
+                    }
+                    val http = connection as? java.net.HttpURLConnection
+                    try {
+                        if (http != null) require(http.responseCode in 200..299) { "OculusDB HTTP " + http.responseCode }
+                        return JSONObject(connection.getInputStream().bufferedReader().use { it.readText() })
+                    } finally { http?.disconnect() }
+                } catch (e: Exception) { last = e }
+            }
+            throw IllegalStateException("OculusDB could not be reached: " + (last?.message ?: "unknown error"))
+        }
+        val app = getJson("/api/v1/packagename/com.AnotherAxiom.GorillaTag")
+        val appId = app.optString("id").ifBlank {
+            app.optJSONObject("application")?.optString("id").orEmpty()
+        }
+        require(appId.matches(Regex("[0-9]+"))) { "OculusDB did not return the Gorilla Tag application ID." }
+        val versions = JSONArray()
+        val list = getArray("/api/v1/versions/" + appId + "?onlydownloadable=true")
+        for (i in 0 until list.length()) {
+            val v = list.optJSONObject(i) ?: continue
+            val channels = v.optJSONArray("releaseChannels") ?: JSONArray()
+            if (channels.length() == 0) continue
+            versions.put(JSONObject()
+                .put("id", v.optString("id"))
+                .put("version", v.optString("version"))
+                .put("versionCode", v.optLong("versionCode"))
+                .put("uploadedDate", v.optString("uploadedDate"))
+                .put("size", v.optLong("size"))
+                .put("filename", v.optString("filename"))
+                .put("appId", appId))
+        }
+        return JSONObject()
+            .put("source", "OculusDB")
+            .put("appId", appId)
+            .put("versions", versions)
+            .put("note", "OculusDB provides version metadata. Meta requires an owner account signed into the developer portal to retrieve protected APK/OBB files.")
+    }
+
+    private fun getArray(path: String): JSONArray {
+        var last: Exception? = null
+        for (host in listOf("https://oculusdb-rewrite.rui2015.me", "https://oculusdb.rui2015.me")) {
+            try {
+                val connection = java.net.URL(host + path).openConnection().apply {
+                    connectTimeout = 12000
+                    readTimeout = 20000
+                    setRequestProperty("User-Agent", "GorillaRinth/0.1")
+                    setRequestProperty("Accept", "application/json")
+                }
+                val http = connection as? java.net.HttpURLConnection
+                try {
+                    if (http != null) require(http.responseCode in 200..299) { "OculusDB HTTP " + http.responseCode }
+                    return JSONArray(connection.getInputStream().bufferedReader().use { it.readText() })
+                } finally { http?.disconnect() }
+            } catch (e: Exception) { last = e }
+        }
+        throw IllegalStateException("Could not retrieve Gorilla Tag versions from OculusDB: " + (last?.message ?: "unknown error"))
+    }
+
     inner class NativeBridge {
         @JavascriptInterface
         fun call(id: Int, method: String, rawArgs: String) {
@@ -401,6 +468,15 @@ class MainActivity : ComponentActivity() {
                 val args = JSONArray(rawArgs)
                 when (method) {
                     "state" -> complete(id, true, state().toString())
+                    "oculusVersions" -> onIo(id) { fetchOculusVersions().toString() }
+                    "openOculusVersion" -> {
+                        val appId = args.optString(0)
+                        val versionId = args.optString(1)
+                        require(appId.matches(Regex("[0-9]+")) && versionId.matches(Regex("[0-9]+"))) { "Invalid OculusDB version selection." }
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://developer.oculus.com/manage/applications/" + appId + "/versions/" + versionId))
+                        runOnUiThread { startActivity(intent) }
+                        complete(id, true, "true")
+                    }
                     "storeList" -> complete(id, true, JSONObject()
                         .put("configured", false).put("mods", JSONArray())
                         .put("offline", true).put("offlineReason", "The GorillaRinth server catalog will be connected later.")
