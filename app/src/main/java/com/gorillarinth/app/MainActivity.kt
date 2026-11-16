@@ -610,6 +610,118 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun downloadDependency(url: String, destination: File) {
+        val connection = java.net.URL(url).openConnection().apply {
+            connectTimeout = 12000
+            readTimeout = 30000
+            setRequestProperty("User-Agent", "GorillaRinth/0.1")
+        }
+        val http = connection as? java.net.HttpURLConnection
+        try {
+            if (http != null) require(http.responseCode in 200..299) { "HTTP " + http.responseCode }
+            connection.getInputStream().use { input ->
+                destination.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= 128L * 1024 * 1024) { "QMOD exceeds the 128 MB download limit." }
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            require(destination.length() > 100) { "Downloaded file is empty or incomplete." }
+        } finally {
+            http?.disconnect()
+        }
+    }
+
+    private fun isValidDependencyQmod(file: File, expectedId: String): Boolean {
+        return try {
+            var found = false
+            ZipInputStream(file.inputStream().buffered()).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    if (!entry.isDirectory && (entry.name.substringAfterLast('/') == "mod.json" ||
+                                entry.name.substringAfterLast('/') == "manifest.json")) {
+                        val text = zip.readBytes().toString(Charsets.UTF_8)
+                        val json = JSONObject(text)
+                        val actualId = json.optString("id", json.optString("packageId", ""))
+                        if (actualId.equals(expectedId, ignoreCase = true)) found = true
+                    }
+                    zip.closeEntry()
+                }
+            }
+            found
+        } catch (_: Exception) { false }
+    }
+
+    private fun discoverDependencyQmodUrls(id: String): List<String> {
+        val results = LinkedHashSet<String>()
+        val queries = listOf("\"$id\" Gorilla Tag Quest mod", "$id GorillaTag QMOD")
+        for (query in queries) {
+            try {
+                val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+                val api = java.net.URL("https://api.github.com/search/repositories?q=" + encoded + "&per_page=8")
+                val connection = api.openConnection().apply {
+                    connectTimeout = 10000
+                    readTimeout = 15000
+                    setRequestProperty("Accept", "application/vnd.github+json")
+                    setRequestProperty("User-Agent", "GorillaRinth/0.1")
+                }
+                val json = connection.getInputStream().bufferedReader().use { JSONObject(it.readText()) }
+                val repos = json.optJSONArray("items") ?: continue
+                for (i in 0 until minOf(repos.length(), 8)) {
+                    val repo = repos.optJSONObject(i) ?: continue
+                    val fullName = repo.optString("full_name")
+                    val branch = repo.optString("default_branch", "main")
+                    if (fullName.isBlank()) continue
+                    // Check release assets first.
+                    try {
+                        val releasesUrl = java.net.URL("https://api.github.com/repos/" + fullName + "/releases?per_page=10")
+                        val relConn = releasesUrl.openConnection().apply {
+                            connectTimeout = 8000
+                            readTimeout = 12000
+                            setRequestProperty("User-Agent", "GorillaRinth/0.1")
+                        }
+                        val releases = org.json.JSONArray(relConn.getInputStream().bufferedReader().use { it.readText() })
+                        for (r in 0 until releases.length()) {
+                            val assets = releases.optJSONObject(r)?.optJSONArray("assets") ?: continue
+                            for (a in 0 until assets.length()) {
+                                val asset = assets.optJSONObject(a) ?: continue
+                                val name = asset.optString("name")
+                                val downloadUrl = asset.optString("browser_download_url")
+                                if (name.endsWith(".qmod", true) && downloadUrl.startsWith("https://")) results.add(downloadUrl)
+                            }
+                        }
+                    } catch (_: Exception) { }
+                    // Also inspect repository files for directly hosted QMOD archives.
+                    try {
+                        val treeUrl = java.net.URL("https://api.github.com/repos/" + fullName + "/git/trees/" + branch + "?recursive=1")
+                        val treeConn = treeUrl.openConnection().apply {
+                            connectTimeout = 8000
+                            readTimeout = 12000
+                            setRequestProperty("User-Agent", "GorillaRinth/0.1")
+                        }
+                        val tree = JSONObject(treeConn.getInputStream().bufferedReader().use { it.readText() })
+                        val nodes = tree.optJSONArray("tree") ?: continue
+                        for (n in 0 until nodes.length()) {
+                            val path = nodes.optJSONObject(n)?.optString("path") ?: continue
+                            if (path.endsWith(".qmod", true)) {
+                                results.add("https://raw.githubusercontent.com/" + fullName + "/" + branch + "/" +
+                                    path.split("/").joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") })
+                            }
+                        }
+                    } catch (_: Exception) { }
+                }
+            } catch (_: Exception) { }
+            if (results.size >= 30) break
+        }
+        return results.toList()
+    }
+
     private fun resolveQmodDependencies(root: File, manifest: JSONObject): JSONArray {
         val dependencies = manifest.optJSONArray("dependencies") ?: return JSONArray()
         val report = JSONArray()
@@ -627,50 +739,43 @@ class MainActivity : ComponentActivity() {
             if (!depDir.exists()) {
                 depDir.mkdirs()
                 val archive = File(depDir, "dependency.qmod")
-                // Older Gorilla Tag QMOD manifests often point to deleted RedBrumbler release URLs.
-                // Keep their original URLs first, then use verified community mirrors for these IDs.
                 val fallbackUrls = when (id.lowercase()) {
-                    "monkecodegen" -> listOf(
-                        "https://github.com/GalaxyOnVR/MonkeCodegen-and-Utils/releases/download/1.1.2/monkecodgen.qmod"
-                    )
-                    "monkecomputer" -> listOf(
-                        "https://raw.githubusercontent.com/GalaxyOnVR/MonkeComputer/main/MonkeComputer%20(5).qmod"
-                    )
+                    "monkecodegen" -> listOf("https://github.com/GalaxyOnVR/MonkeCodegen-and-Utils/releases/download/1.1.2/monkecodgen.qmod")
+                    "monkecomputer" -> listOf("https://raw.githubusercontent.com/GalaxyOnVR/MonkeComputer/main/MonkeComputer%20(5).qmod")
                     else -> emptyList()
                 }
-                val candidates = (listOf(url) + fallbackUrls).distinct()
-                var lastDownloadError: Exception? = null
                 var downloaded = false
-                for (candidate in candidates) {
+                var lastError: String? = null
+                // Try the manifest URL and known mirrors. A 200 response is not enough:
+                // verify that the file is a readable QMOD whose manifest matches this dependency.
+                for (candidate in (listOf(url) + fallbackUrls).distinct()) {
                     try {
-                        val connection = java.net.URL(candidate).openConnection().apply {
-                            connectTimeout = 15000
-                            readTimeout = 30000
-                            setRequestProperty("User-Agent", "GorillaRinth/0.1")
-                        }
-                        connection.getInputStream().use { input ->
-                            archive.outputStream().use { output ->
-                                val buffer = ByteArray(8192)
-                                var total = 0L
-                                while (true) {
-                                    val count = input.read(buffer)
-                                    if (count < 0) break
-                                    total += count
-                                    require(total <= 128L * 1024 * 1024) { "Dependency " + id + " exceeds the 128 MB download limit." }
-                                    output.write(buffer, 0, count)
-                                }
-                            }
-                        }
+                        downloadDependency(candidate, archive)
+                        require(isValidDependencyQmod(archive, id)) { "Downloaded file is not a valid QMOD for " + id }
                         downloaded = true
                         break
                     } catch (e: Exception) {
                         archive.delete()
-                        lastDownloadError = e
+                        lastError = e.message
+                    }
+                }
+                // If all supplied URLs fail, discover public repositories/releases online.
+                if (!downloaded) {
+                    for (candidate in discoverDependencyQmodUrls(id)) {
+                        try {
+                            downloadDependency(candidate, archive)
+                            require(isValidDependencyQmod(archive, id)) { "Discovered file is not a valid QMOD for " + id }
+                            downloaded = true
+                            break
+                        } catch (e: Exception) {
+                            archive.delete()
+                            lastError = e.message
+                        }
                     }
                 }
                 check(downloaded) {
-                    "Could not download dependency " + id + ". Checked the manifest URL and known mirrors. " +
-                        (lastDownloadError?.message ?: "")
+                    "Could not find a working QMOD for dependency " + id +
+                        (lastError?.let { ": " + it } ?: "")
                 }
                 val extracted = File(depDir, "contents").apply { mkdirs() }
                 ZipInputStream(archive.inputStream().buffered()).use { zip ->
