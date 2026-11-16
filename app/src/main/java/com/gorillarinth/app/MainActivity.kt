@@ -347,10 +347,15 @@ class MainActivity : ComponentActivity() {
                     }
                     "openDevSettings" -> {
                         runOnUiThread {
-                            val intent = Intent("android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
+                            val intent = Intent("android.settings.SETTINGS")
+                                .setPackage("com.android.settings")
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             runCatching { startActivity(intent) }.onFailure {
-                                Toast.makeText(this@MainActivity, "Android Developer options are unavailable on this device.", Toast.LENGTH_LONG).show()
+                                val fallback = Intent("android.settings.SETTINGS")
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                runCatching { startActivity(fallback) }.onFailure {
+                                    Toast.makeText(this@MainActivity, "Android Settings are unavailable on this device.", Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
                         complete(id, true, "true")
