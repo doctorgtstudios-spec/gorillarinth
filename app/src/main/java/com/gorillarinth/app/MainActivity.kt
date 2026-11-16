@@ -82,9 +82,10 @@ class MainActivity : ComponentActivity() {
             JSONObject().put("versionName", info.versionName ?: "Unknown")
                 .put("versionCode", info.versionCode.toLong()).put("running", false)
         }
+        val autoReconnect = getSharedPreferences("device", MODE_PRIVATE).getBoolean("autoReconnect", false)
         return JSONObject()
             .put("library", library)
-            .put("device", JSONObject().put("state", "none").put("paired", false).put("autoReconnect", false).put("model", "Quest"))
+            .put("device", JSONObject().put("state", "none").put("paired", false).put("autoReconnect", autoReconnect).put("model", "Quest"))
             .put("game", game)
             .put("base", JSONObject().put("usable", false).put("fromModded", false).put("name", ""))
             .put("checks", JSONArray())
@@ -154,7 +155,12 @@ class MainActivity : ComponentActivity() {
                         getSharedPreferences("mods", MODE_PRIVATE).edit().clear().apply()
                         complete(id, true, "true")
                     }
-                    "setAutoReconnect" -> complete(id, true, "false")
+                    "setAutoReconnect" -> {
+                        val enabled = args.optBoolean(0, false)
+                        getSharedPreferences("device", MODE_PRIVATE).edit()
+                            .putBoolean("autoReconnect", enabled).apply()
+                        complete(id, true, enabled.toString())
+                    }
                     "reconnect" -> complete(id, true, "false")
                     "storeConfig" -> complete(id, true, JSONObject().put("url", "").put("configured", false).toString())
                     "pair", "pullBase", "chooseBase", "restoreBase", "stopGame", "apply", "storeSetUrl", "storeInstall" ->
