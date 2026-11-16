@@ -1,20 +1,17 @@
 # GorillaRinth
 
-An early Android UI prototype for a Quest mod-management companion.
+An Android companion and mod-management prototype for Gorilla Tag on Quest.
 
 ## Current prototype
-- Modrinth-inspired navigation and card layout with GorillaRinth yellow branding.
-- Home, Mods, Patcher, Themes, and Settings tabs.
-- Theme selector: yellow, green, blue, purple, dark, and light.
-- Single-ZIP archive picker with safe extraction into private app storage (500-entry and 256 MB limits; rejects path traversal).
-- Launch button opens the installed Gorilla Tag app (`com.AnotherAxiom.GorillaTag`) when available.
-- GitHub Actions workflow to build a debug APK automatically.
+- Original GorillaRinth interface with yellow default branding.
+- Home, Mods, Setup, Game, and Settings views.
+- Theme selector with yellow, blue, cyan, purple, pink, red, orange, green, and RGB options.
+- Local ZIP archive import with safe extraction into private app storage.
+- Launch button opens Gorilla Tag when installed.
+- GitHub Actions builds a debug APK automatically.
 
 ## Important status
-This first build is a **UI prototype**, not a working Gorilla Tag mod loader. Wireless ADB pairing, Quest file access, OBB backup/patching, compatible mod installation, and game-side loading are not implemented. The patch button is deliberately disabled until a Gorilla Tag-specific patch procedure and compatible, authorized loader are verified. ZIP import extracts one selected archive into GorillaRinth private storage with basic path-traversal and size protections. The Launch button can open Gorilla Tag if it is installed, but does not load mods.
+This is an early prototype, not a working Gorilla Tag mod loader. Wireless ADB pairing, Quest file access, OBB patching, compatible mod installation, and game-side loading are not implemented. ZIP import only inspects files locally; it does not activate mods.
 
 ## Build
 Push to `main` or run the **Build GorillaRinth APK** workflow manually from the Actions tab. Download the `GorillaRinth-debug-apk` artifact from the successful run.
-
-## Driftrinth APK inspection notes
-The supplied Driftrinth APK identifies itself in its embedded UI and code strings as an **Orion Drift** mod manager. Its native code references the Orion Drift package `com.AnotherAxiom.A2`, the `/sdcard/Android/obb/com.AnotherAxiom.A2/` OBB location, and Orion Drift-specific `.utoc`, `.ucas`, and `.pak` patch containers. Those details are game-specific and are not safe to transplant as a Gorilla Tag patcher. GorillaRinth therefore keeps the game target `com.AnotherAxiom.GorillaTag`; its launch action is implemented separately, while OBB patching remains disabled pending a verified Gorilla Tag-specific format and authorized workflow.
