@@ -11,7 +11,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import com.flyfishxu.kadb.Kadb
-import com.flyfishxu.kadb.mdns.KadbMdnsAndroid
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
+import java.util.concurrent.CopyOnWriteArrayList
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -26,11 +28,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.collect
 
 class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
-    private lateinit var mdns: KadbMdnsAndroid
+    private lateinit var nsdManager: NsdManager
+    private data class AdbEndpoint(val name: String, val host: String, val port: Int)
+    private val pairingEndpoints = CopyOnWriteArrayList<AdbEndpoint>()
+    private val connectionEndpoints = CopyOnWriteArrayList<AdbEndpoint>()
+    private val discoveryListeners = mutableListOf<NsdManager.DiscoveryListener>()
     @Volatile private var adbClient: Kadb? = null
     private val adbScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pendingImportId: Int? = null
@@ -55,18 +60,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        mdns = KadbMdnsAndroid(applicationContext)
-        mdns.start()
-        adbScope.launch {
-            mdns.state.collect { discovered ->
-                val prefs = getSharedPreferences("device", MODE_PRIVATE)
-                val savedHost = prefs.getString("host", null)
-                val endpoint = discovered.connectDevices.firstOrNull { savedHost == null || it.host == savedHost }
-                if (prefs.getBoolean("autoReconnect", false) && endpoint != null && adbClient?.connectionCheck() != true) {
-                    runCatching { connectTo(endpoint.host, endpoint.port) }
-                }
-            }
-        }
+        nsdManager = getSystemService(NsdManager::class.java)
+        startAdbDiscovery("_adb-tls-pairing._tcp", pairing = true)
+        startAdbDiscovery("_adb-tls-connect._tcp", pairing = false)
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -82,7 +78,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         runCatching { adbClient?.close() }
-        runCatching { mdns.close() }
+        discoveryListeners.forEach { listener -> runCatching { nsdManager.stopServiceDiscovery(listener) } }
         adbScope.cancel()
         super.onDestroy()
     }
@@ -99,8 +95,44 @@ class MainActivity : ComponentActivity() {
         }.start()
     }
 
-    private fun pairPort(): Int =
-        mdns.state.value.pairDevices.firstOrNull()?.port ?: 0
+    @Suppress("DEPRECATION")
+    private fun startAdbDiscovery(serviceType: String, pairing: Boolean) {
+        val listener = object : NsdManager.DiscoveryListener {
+            override fun onDiscoveryStarted(type: String) {}
+            override fun onDiscoveryStopped(type: String) {}
+            override fun onStartDiscoveryFailed(type: String, errorCode: Int) {
+                runCatching { nsdManager.stopServiceDiscovery(this) }
+            }
+            override fun onStopDiscoveryFailed(type: String, errorCode: Int) {}
+            override fun onServiceLost(service: NsdServiceInfo) {
+                val target = if (pairing) pairingEndpoints else connectionEndpoints
+                target.removeAll { it.name == service.serviceName }
+            }
+            override fun onServiceFound(service: NsdServiceInfo) {
+                nsdManager.resolveService(service, object : NsdManager.ResolveListener {
+                    override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {}
+                    override fun onServiceResolved(info: NsdServiceInfo) {
+                        val host = info.host?.hostAddress ?: return
+                        val endpoint = AdbEndpoint(info.serviceName, host, info.port)
+                        val target = if (pairing) pairingEndpoints else connectionEndpoints
+                        target.removeAll { it.name == endpoint.name }
+                        target.add(endpoint)
+                        if (!pairing && getSharedPreferences("device", MODE_PRIVATE).getBoolean("autoReconnect", false)
+                            && adbClient?.connectionCheck() != true) {
+                            val savedHost = getSharedPreferences("device", MODE_PRIVATE).getString("host", null)
+                            if (savedHost == null || savedHost == host) {
+                                adbScope.launch { runCatching { connectTo(host, info.port) } }
+                            }
+                        }
+                    }
+                })
+            }
+        }
+        discoveryListeners += listener
+        runCatching { nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener) }
+    }
+
+    private fun pairPort(): Int = pairingEndpoints.firstOrNull()?.port ?: 0
 
     private fun connectTo(host: String, port: Int): Kadb {
         require(port in 1..65535) { "Wireless debugging connection port was not found." }
@@ -118,14 +150,14 @@ class MainActivity : ComponentActivity() {
 
     private fun pairWireless(port: Int, code: String, requestedConnectPort: Int): String {
         require(code.matches(Regex("\\d{6}"))) { "Enter the six-digit Wireless debugging pairing code." }
-        val endpoint = mdns.state.value.pairDevices.firstOrNull { it.port == port }
-            ?: mdns.state.value.pairDevices.firstOrNull()
+        val endpoint = pairingEndpoints.firstOrNull { it.port == port }
+            ?: pairingEndpoints.firstOrNull()
             ?: error("Pairing port not detected. Open Wireless debugging > Pair device with pairing code, then wait a moment.")
         runBlocking { Kadb.pair(endpoint.host, port, code) }
 
-        val connectEndpoint = mdns.state.value.connectDevices.firstOrNull {
+        val connectEndpoint = connectionEndpoints.firstOrNull {
             it.host == endpoint.host && (requestedConnectPort == 0 || it.port == requestedConnectPort)
-        } ?: mdns.state.value.connectDevices.firstOrNull {
+        } ?: connectionEndpoints.firstOrNull {
             requestedConnectPort == 0 || it.port == requestedConnectPort
         }
         val connectPort = if (requestedConnectPort > 0) requestedConnectPort else
@@ -138,7 +170,7 @@ class MainActivity : ComponentActivity() {
     private fun reconnectWireless(): Boolean {
         val prefs = getSharedPreferences("device", MODE_PRIVATE)
         val savedHost = prefs.getString("host", null) ?: return false
-        val live = mdns.state.value.connectDevices.firstOrNull { it.host == savedHost }
+        val live = connectionEndpoints.firstOrNull { it.host == savedHost }
         val host = live?.host ?: savedHost
         val port = live?.port ?: prefs.getInt("connectPort", 0)
         return runCatching { connectTo(host, port); true }.getOrDefault(false)
