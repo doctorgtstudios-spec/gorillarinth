@@ -9,13 +9,14 @@
   --s1: #16181c; --s15: #1a1c20; --s2: #1d1f23; --s25: #222429; --s3: #27292e; --s4: #34363c; --s5: #42444a;
   --line: #c1bed11f;
   --hi: #fff; --tx: #b0bac5; --mut: #96a2b0;
-  --brand: #4f9cff; --b3: #90c4ff; --b7: #1f5ff1; --brand-300: var(--b3); --on-brand: #04122a;
+  --brand: #ffd43b; --b3: #ffe58a; --b7: #b77900; --brand-300: var(--b3); --on-brand: #241900;
   --brand-hl: color-mix(in srgb, var(--brand) 25%, transparent); --brand-bg: color-mix(in srgb, var(--brand) 15%, transparent);
   --red: #ff496e; --red-bg: #ff496e26; --orange: #ffa347; --orange-bg: #e0832526;
   --scrim: #060a12a6; --scrim-soft: #060a1230; --scrim-plain: #000a; --track: #ffffff1c; --float: #0009;
   --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 20px;
 }
 
+:root[data-theme="yellow"] { --brand: #ffd43b; --b3: #ffe58a; --b7: #b77900; }
 :root[data-theme="cyan"] { --brand: #22d3ee; --b3: #8beaf8; --b7: #0e7490; }
 :root[data-theme="purple"] { --brand: #c78aff; --b3: #dab2ff; --b7: #821ed2; }
 :root[data-theme="pink"] { --brand: #ff7ab8; --b3: #ffb3d6; --b7: #c11f72; }
@@ -56,7 +57,7 @@ svg.i { width: 1.25em; height: 1.25em; flex: none; fill: none; stroke: currentCo
 body.ready .shell { opacity: 1; }
 .top { grid-column: 1 / 3; display: flex; align-items: center; gap: 18px; padding: 0 16px 0 14px; }
 .brand { display: flex; align-items: center; gap: 8px; color: var(--hi); font-weight: 700; font-size: 22px; letter-spacing: -.02em; }
-.mark { width: 30px; height: 30px; }
+.mark { width: 30px; height: 30px; object-fit: contain; }
 .navs { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .crumb { display: flex; align-items: center; gap: 8px; margin-left: 10px; color: var(--hi); font-weight: 600; white-space: nowrap; overflow: hidden; }
 .crumb img { width: 24px; height: 24px; border-radius: 6px; }
@@ -287,7 +288,7 @@ button.pill:hover { background: var(--s4); color: var(--hi); }
 .splash-art { position: absolute; left: 50%; top: 50%; width: 118vmax; height: 118vmax; transform: translate(-50%, -50%); opacity: .055; }
 .splash-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(320px, calc(100vw - 48px)); display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .splash-logo { display: flex; align-items: center; gap: 8px; color: var(--hi); font-size: 30px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
-.splash-logo svg { width: 34px; height: 34px; flex: none; }
+.splash-logo img { width: 34px; height: 34px; flex: none; object-fit: contain; }
 .splash-logo em { font-style: normal; color: var(--brand); }
 .splash-bar { width: 100%; height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
 .splash-bar i { display: block; height: 100%; width: 3%; border-radius: 4px; background: var(--brand); transition: width 1.4s cubic-bezier(.2, .7, .3, 1); }
@@ -380,6 +381,7 @@ dialog::backdrop { background: var(--scrim-plain); }
 .mono { font-family: ui-monospace, Consolas, monospace; font-size: 14px; }
 .about-mark { display: flex; align-items: center; gap: 12px; color: var(--hi); font-size: 24px; font-weight: 700; }
 .about-mark svg { width: 40px; height: 40px; }
+.splash-art { position: absolute; width: 28vmin; height: 28vmin; right: 8vw; top: 8vh; object-fit: contain; opacity: .12; }
 .hero { width: 100%; max-height: 300px; object-fit: cover; border-radius: var(--r-lg); margin-bottom: 14px; display: block; }
 .shots { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 14px; }
 .shots img { height: 120px; border-radius: var(--r-md); }
