@@ -4,6 +4,12 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.os.Bundle
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipInputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -48,6 +54,10 @@ private fun GorillaRinthApp() {
     var page by remember { mutableStateOf("Home") }
     var selectedTheme by remember { mutableStateOf(themes.first()) }
     var archiveName by remember { mutableStateOf<String?>(null) }
+    var archiveUri by remember { mutableStateOf<Uri?>(null) }
+    var importStatus by remember { mutableStateOf("No archive imported yet.") }
+    var importing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var pairingCode by remember { mutableStateOf("") }
     val context = LocalContext.current
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -59,13 +69,17 @@ private fun GorillaRinthApp() {
             } ?: it.lastPathSegment?.substringAfterLast('/') ?: "Selected file"
             if (name.endsWith(".zip", ignoreCase = true)) {
                 archiveName = name
+                archiveUri = it
+                importStatus = "ZIP selected. Ready to inspect and extract."
                 runCatching {
                     context.contentResolver.takePersistableUriPermission(
                         it, Intent.FLAG_GRANT_READ_URI_PERMISSION
                     )
                 }
             } else {
-                archiveName = "Please select a .zip archive"
+                archiveName = null
+                archiveUri = null
+                importStatus = "Please select a .zip archive."
             }
         }
     }
@@ -154,10 +168,26 @@ private fun GorillaRinthApp() {
                             Button(onClick = { picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = selectedTheme.accent, contentColor = Color(0xFF171717))) {
                                 Icon(Icons.Filled.FileOpen, null); Spacer(Modifier.width(8.dp)); Text("Browse ZIP archives")
                             }
-                            archiveName?.let { Text("Selected: $it", color = if (it.endsWith(".zip", true)) selectedTheme.accent else Color(0xFFFF7777), modifier = Modifier.padding(top = 10.dp)) }
+                            archiveName?.let { Text("Selected: $it", color = selectedTheme.accent, modifier = Modifier.padding(top = 10.dp)) }
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    val uri = archiveUri ?: return@Button
+                                    importing = true
+                                    importStatus = "Inspecting archive…"
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) { extractModArchive(context, uri) }
+                                        importStatus = result
+                                        importing = false
+                                    }
+                                },
+                                enabled = archiveUri != null && !importing,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(if (importing) "Importing…" else "Inspect & extract ZIP") }
+                            Text(importStatus, color = muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
                         }
                         Spacer(Modifier.height(12.dp))
-                        Text("The app currently selects and remembers one ZIP archive. It does not extract or install the archive yet; that requires a verified package layout and compatible game-side loader.", color = muted, fontSize = 12.sp)
+                        Text("ZIP contents are extracted into GorillaRinth's private app storage. This does not install or load them into Gorilla Tag; the archive layout and compatible loader must be verified first.", color = muted, fontSize = 12.sp)
                     }
                     "Patcher" -> {
                         Text("OBB patcher", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
@@ -241,5 +271,60 @@ private fun ActionRow(title: String, subtitle: String, icon: ImageVector, accent
             Text(subtitle, color = MaterialTheme.colorScheme.onSurface.copy(alpha = .62f), fontSize = 11.sp)
         }
         Icon(Icons.Filled.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .45f))
+    }
+}
+
+private suspend fun extractModArchive(context: android.content.Context, uri: Uri): String {
+    val root = File(context.filesDir, "imported_mod")
+    val temp = File(context.filesDir, "imported_mod_tmp")
+    return try {
+        if (temp.exists()) temp.deleteRecursively()
+        if (!temp.mkdirs()) return "Could not create the temporary import folder."
+        var entries = 0
+        var totalBytes = 0L
+        var files = 0
+        val canonicalRoot = temp.canonicalPath + File.separator
+        val input = context.contentResolver.openInputStream(uri)
+            ?: return "Could not open the selected ZIP archive."
+        input.use { raw ->
+            ZipInputStream(raw).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    entries++
+                    if (entries > 500) throw IllegalArgumentException("Archive contains too many entries (limit: 500).")
+                    val output = File(temp, entry.name)
+                    val canonicalOutput = output.canonicalPath
+                    if (!canonicalOutput.startsWith(canonicalRoot) && canonicalOutput != temp.canonicalPath) {
+                        throw IllegalArgumentException("Unsafe ZIP path detected: ${entry.name}")
+                    }
+                    if (entry.isDirectory) {
+                        if (!output.exists() && !output.mkdirs()) throw IllegalStateException("Could not create an archive folder.")
+                    } else {
+                        output.parentFile?.let { if (!it.exists() && !it.mkdirs()) throw IllegalStateException("Could not create an archive folder.") }
+                        FileOutputStream(output).use { sink ->
+                            val buffer = ByteArray(8192)
+                            while (true) {
+                                val count = zip.read(buffer)
+                                if (count < 0) break
+                                totalBytes += count
+                                if (totalBytes > 256L * 1024L * 1024L) {
+                                    throw IllegalArgumentException("Extracted data exceeds the 256 MB safety limit.")
+                                }
+                                sink.write(buffer, 0, count)
+                            }
+                        }
+                        files++
+                    }
+                    zip.closeEntry()
+                }
+            }
+        }
+        if (files == 0) throw IllegalArgumentException("The ZIP archive contains no files.")
+        if (root.exists() && !root.deleteRecursively()) throw IllegalStateException("Could not replace the previous imported archive.")
+        if (!temp.renameTo(root)) throw IllegalStateException("Could not finalize the extracted archive.")
+        "Imported successfully: $files files extracted (${totalBytes / 1024} KB). Stored privately in GorillaRinth."
+    } catch (e: Exception) {
+        temp.deleteRecursively()
+        "Import failed: ${e.message ?: "Unknown ZIP error"}"
     }
 }
