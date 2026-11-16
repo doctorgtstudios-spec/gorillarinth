@@ -28,7 +28,7 @@ jobs:
         with:
           gradle-version: "8.9"
       - name: Copy GorillaRinth logo
-        run: cp download.png app/src/main/assets/driftrinth/download.png
+        run: cp download.png app/src/main/assets/gorillarinth/download.png
       - name: Build debug APK
         run: gradle :app:assembleDebug
       - name: Upload APK
