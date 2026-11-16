@@ -27,8 +27,26 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
-      - name: Copy GorillaRinth logo
-        run: cp download.png app/src/main/assets/gorillarinth/download.png
+      - name: Prepare Gorilla Tag icon with transparent background
+        run: |
+          python -m pip install --quiet pillow
+          python - <<'PY'
+          from PIL import Image, ImageDraw
+          src = Image.open("images.jpeg").convert("RGB")
+          flooded = src.copy()
+          ImageDraw.floodfill(flooded, (0, 0), (255, 0, 255), thresh=38)
+          pixels = src.load()
+          marked = flooded.load()
+          out = Image.new("RGBA", src.size, (0, 0, 0, 0))
+          dst = out.load()
+          for y in range(src.height):
+              for x in range(src.width):
+                  if marked[x, y] != (255, 0, 255):
+                      r, g, b = pixels[x, y]
+                      dst[x, y] = (r, g, b, 255)
+          out.save("app/src/main/assets/gorillarinth/gorilla-icon.png")
+          PY
+          cp download.png app/src/main/assets/gorillarinth/download.png
       - name: Build debug APK
         run: gradle :app:assembleDebug
       - name: Upload APK
