@@ -203,11 +203,14 @@ class MainActivity : ComponentActivity() {
             ?: error("No Gorilla Tag OBB found. Install or launch Gorilla Tag once, then retry.")
         val original = File(filesDir, "base_original.obb")
         val remoteBackup = "$remote.gorillarinth.bak"
-        val backupCheck = client.shell("if [ -f '$remoteBackup' ]; then echo exists; else echo missing; fi").allOutput.trim()
-        if (backupCheck != "exists") shellChecked(client, "cp '$remote' '$remoteBackup'")
-        // Prefer the preserved first-install backup on later pulls; never snapshot our own patched OBB as clean.
-        client.pull(original, if (backupCheck == "exists") remoteBackup else remote)
-        check(original.length() > 0L) { "The downloaded OBB is empty." }
+        if (!original.exists() || original.length() == 0L) {
+            val backupCheck = client.shell("if [ -f '$remoteBackup' ]; then echo exists; else echo missing; fi").allOutput.trim()
+            // Migrate an older release's headset-side backup into GorillaRinth's private app storage.
+            client.pull(original, if (backupCheck == "exists") remoteBackup else remote)
+            check(original.length() > 0L) { "The downloaded OBB is empty." }
+        }
+        // Remove any backup left by older versions; the clean copy now lives only in filesDir.
+        shellChecked(client, "rm -f '$remoteBackup'")
         getSharedPreferences("device", MODE_PRIVATE).edit().putString("obbPath", remote).apply()
         return remote
     }
@@ -229,7 +232,7 @@ class MainActivity : ComponentActivity() {
             File(filesDir, "base_patched.obb").delete()
             getSharedPreferences("device", MODE_PRIVATE).edit().remove("appliedModId").remove("appliedAt").apply()
             return JSONObject().put("mods", 0).put("removed", JSONArray()).put("bytes", original.length())
-                .put("backup", "$remote.gorillarinth.bak")
+                .put("backup", "GorillaRinth app data")
         }
         val manifestFile = findManifestFile() ?: error("The imported mod manifest is missing.")
         val overlayRoot = File(manifestFile.parentFile, "obb")
@@ -278,19 +281,15 @@ class MainActivity : ComponentActivity() {
         val client = requireAdb()
         val remote = getSharedPreferences("device", MODE_PRIVATE).getString("obbPath", null)
             ?: error("No saved Gorilla Tag OBB path. Connect and use Copy from Quest first.")
-        val backup = "$remote.gorillarinth.bak"
-        val exists = client.shell("if [ -f '$backup' ]; then echo yes; else echo no; fi").allOutput.trim()
-        if (exists == "yes") shellChecked(client, "cp '$backup' '$remote'")
-        else {
-            val local = File(filesDir, "base_original.obb")
-            check(local.exists()) { "No original OBB backup was found." }
-            val tempRemote = "$remote.gorillarinth.restore"
-            client.push(local, tempRemote)
-            shellChecked(client, "mv '$tempRemote' '$remote'")
-        }
+        val local = File(filesDir, "base_original.obb")
+        check(local.exists() && local.length() > 0L) { "No original OBB backup was found in GorillaRinth's app data. Use Copy from Quest first." }
+        val tempRemote = "$remote.gorillarinth.restore"
+        client.push(local, tempRemote)
+        shellChecked(client, "mv '$tempRemote' '$remote'")
+        shellChecked(client, "rm -f '$remote.gorillarinth.bak'")
         File(filesDir, "base_patched.obb").delete()
         getSharedPreferences("device", MODE_PRIVATE).edit().remove("appliedModId").remove("appliedAt").apply()
-        return "Original Gorilla Tag OBB restored. Backup kept at $backup."
+        return "Original Gorilla Tag OBB restored. Backup is stored privately in GorillaRinth app data."
     }
 
     private fun state(): JSONObject {
