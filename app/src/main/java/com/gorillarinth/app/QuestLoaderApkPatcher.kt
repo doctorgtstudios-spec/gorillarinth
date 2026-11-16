@@ -14,6 +14,7 @@ import java.net.URL
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.PrivateKey
+import java.security.cert.X509Certificate
 import java.security.spec.AlgorithmParameterSpec
 import java.util.Date
 import java.util.Enumeration
@@ -220,14 +221,14 @@ object QuestLoaderApkPatcher {
                 .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
                 .setCertificateSubject(X500Principal("CN=GorillaRinth APK Patcher"))
                 .setCertificateSerialNumber(BigInteger.ONE)
-                .setCertificateNotBefore(Date(0))
+                .setCertificateNotBefore(Date(0L))
                 .setCertificateNotAfter(Date(System.currentTimeMillis() + 10L * 365 * 24 * 60 * 60 * 1000))
                 .build()
             generator.initialize(spec)
             generator.generateKeyPair()
         }
         val privateKey = keyStore.getKey(alias, null) as PrivateKey
-        val certificate = keyStore.getCertificate(alias)
+        val certificate = keyStore.getCertificate(alias) as X509Certificate
         val signer = ApkSigner.SignerConfig.Builder("GorillaRinth", privateKey, listOf(certificate)).build()
         ApkSigner.Builder(listOf(signer))
             .setInputApk(input)
