@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
                         val target = if (pairing) pairingEndpoints else connectionEndpoints
                         target.removeAll { it.name == endpoint.name }
                         target.add(endpoint)
-                        if (!pairing && getSharedPreferences("device", MODE_PRIVATE).getBoolean("autoReconnect", false)
+                        if (!pairing && getSharedPreferences("device", MODE_PRIVATE).getBoolean("autoReconnect", true)
                             && adbClient?.connectionCheck() != true) {
                             val savedHost = getSharedPreferences("device", MODE_PRIVATE).getString("host", null)
                             if (savedHost == null || savedHost == host) {
@@ -154,6 +154,7 @@ class MainActivity : ComponentActivity() {
             ?: pairingEndpoints.firstOrNull()
             ?: error("Pairing port not detected. Open Wireless debugging > Pair device with pairing code, then wait a moment.")
         runBlocking { Kadb.pair(endpoint.host, port, code) }
+        getSharedPreferences("device", MODE_PRIVATE).edit().putString("host", endpoint.host).apply()
 
         val connectEndpoint = connectionEndpoints.firstOrNull {
             it.host == endpoint.host && (requestedConnectPort == 0 || it.port == requestedConnectPort)
