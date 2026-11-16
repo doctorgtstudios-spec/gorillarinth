@@ -158,11 +158,11 @@ class MainActivity : ComponentActivity() {
         getSharedPreferences("device", MODE_PRIVATE).edit().putString("host", endpoint.host).apply()
 
         var connectEndpoint: AdbEndpoint? = null
-        repeat(20) {
+        for (attempt in 0 until 20) {
             connectEndpoint = connectionEndpoints.firstOrNull {
                 it.host == endpoint.host && (requestedConnectPort == 0 || it.port == requestedConnectPort)
             } ?: connectionEndpoints.firstOrNull { requestedConnectPort == 0 || it.port == requestedConnectPort }
-            if (connectEndpoint != null) return@repeat
+            if (connectEndpoint != null) break
             Thread.sleep(250)
         }
         val connectPort = if (requestedConnectPort > 0) requestedConnectPort else
