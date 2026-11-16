@@ -16,7 +16,7 @@
     if (ok) w.resolve(value); else w.reject(new Error(value));
   };
   window.__drProgress = (p) => listeners.forEach((cb) => cb(p));
-  window.driftrinth = {
+  window.gorillarinth = window.driftrinth = {
     state: () => call('state'),
     pair: (port, code, connectPort) => call('pair', port, code, connectPort),
     pairingPort: () => call('pairingPort'),
