@@ -167,12 +167,20 @@ const libFiltered = () => {
 };
 
 // ---- Home -----------------------------------------------------------------------
+function gameBuildActions() {
+  const plan = S && S.qmodGameVersionMatch ? S.qmodGameVersionMatch : {};
+  return `<div class="row wrap" style="margin-top:10px">
+    ${plan.status === 'download' ? '<button class="btn primary" data-download-game-build="1">${ic('download')}Download exact required build</button>' : ''}
+    ${S && S.stagedApk ? '<button class="btn line" data-install-apk="1">Install downloaded APK</button>' : ''}
+    <button class="btn line" data-import-apk="1">Import downloaded Gorilla Tag APK</button>
+  </div>`;
+}
 function mountHome() {
   return `<div class="inner">
     <h1 class="h">Jump in</h1>
     <div class="card jump" id="jump"></div>
     <div id="setup"></div>
-    <div class="section"><div class="card" style="padding:14px"><b>Automatic game-version matching</b><p class="muted" style="margin:6px 0 0">When you import a QMOD, GorillaRinth reads its <code>packageVersion</code>, checks the installed Gorilla Tag build, and looks up that exact build on OculusDB if needed. No manual version picker.</p><div class="row wrap" style="margin-top:10px"><button class="btn line" data-import-apk="1">Import downloaded Gorilla Tag APK</button></div></div></div>
+    <div class="section"><div class="card" style="padding:14px"><b>Automatic game-version matching</b><p class="muted" style="margin:6px 0 0">When you import a QMOD, GorillaRinth reads its <code>packageVersion</code>, checks the installed Gorilla Tag build, and looks up that exact build on OculusDB if needed. No manual version picker.</p>${gameBuildActions()}</div></div>
     <div class="section">
       <h1 class="h">Library</h1>
       <div class="toolbar" style="margin-top:0">
@@ -207,7 +215,7 @@ function mountGame() {
     </div>
     ${tab === 'content' ? `
     <div id="issues"></div>
-    <div class="card" style="padding:16px;margin:12px 0"><b>Automatic QMOD compatibility</b><p class="muted" style="margin:6px 0 0">Upload a QMOD to match its declared Gorilla Tag packageVersion. GorillaRinth opens the exact Meta build page when your installed game does not match.</p><button class="btn line" style="margin-top:10px" data-import-apk="1">Import downloaded Gorilla Tag APK</button></div>
+    <div class="card" style="padding:16px;margin:12px 0"><b>Automatic QMOD compatibility</b><p class="muted" style="margin:6px 0 0">Upload a QMOD to match its declared Gorilla Tag packageVersion. GorillaRinth opens the exact Meta build page when your installed game does not match.</p>${gameBuildActions()}</div>
     <div class="toolbar">
       <div class="search">${ic('search')}<input id="lib-q" type="search" placeholder="Search mods" value="${esc(lib.q)}" autocomplete="off"></div>
       <button class="btn line" data-upload="1">${ic('folder')}Upload mods</button>
@@ -743,6 +751,15 @@ document.addEventListener('click', async (e) => {
     else if (d.setmode) { window.appearance.setMode(d.setmode); renderSettings(); }
     else if (d.settheme) { window.appearance.setTheme(d.settheme); aura.paint(); renderSettings(); }
     else if (d.upload) await upload();
+    else if (d.downloadGameBuild) {
+      const result = JSON.parse(await api.downloadMatchedApk());
+      toast('Downloaded and verified Gorilla Tag ' + result.versionName + '. Android installer is opening for confirmation.');
+      await refresh(true);
+    }
+    else if (d.installApk) {
+      await api.installImportedApk();
+      toast('Android installer opened. Confirm the install on the headset.');
+    }
     else if (d.importApk) {
       const result = JSON.parse(await api.importDownloadedApk());
       toast('Verified Gorilla Tag ' + result.versionName + ' APK (' + size(Number(result.size || 0)) + ') imported. Installation still requires the Android package installer.');
