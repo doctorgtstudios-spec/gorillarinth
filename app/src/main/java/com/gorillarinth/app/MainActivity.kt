@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.os.Bundle
+import android.widget.Toast
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
@@ -327,4 +328,17 @@ private suspend fun extractModArchive(context: android.content.Context, uri: Uri
         temp.deleteRecursively()
         "Import failed: ${e.message ?: "Unknown ZIP error"}"
     }
+}
+
+ 
+private fun launchGorillaTag(context: android.content.Context) {
+    val packageName = "com.AnotherAxiom.GorillaTag"
+    val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+    if (intent == null) {
+        Toast.makeText(context, "Gorilla Tag is not installed or cannot be launched.", Toast.LENGTH_LONG).show()
+        return
+    }
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }
+        .onFailure { Toast.makeText(context, "Could not launch Gorilla Tag: ${it.message}", Toast.LENGTH_LONG).show() }
 }
