@@ -233,6 +233,7 @@ class MainActivity : ComponentActivity() {
             client.push(local, tempRemote)
             shellChecked(client, "mv '$tempRemote' '$remote'")
         }
+        File(filesDir, "base_patched.obb").delete()
         return "Original Gorilla Tag OBB restored. Backup kept at $backup."
     }
 
@@ -318,7 +319,7 @@ class MainActivity : ComponentActivity() {
                         pairWireless(args.optInt(0), args.optString(1), args.optInt(2)).also { }
                     }
                     "reconnect" -> onIo(id) { reconnectWireless().toString() }
-                    "pullBase" -> onIo(id) { pullOriginalObb(); JSONObject().put("saved", true).toString() }
+                    "pullBase", "chooseBase" -> onIo(id) { pullOriginalObb(); JSONObject().put("saved", true).toString() }
                     "apply" -> onIo(id) { patchObb().toString() }
                     "restoreBase" -> onIo(id) { JSONObject().put("message", restoreOriginalObb()).toString() }
                     "stopGame" -> onIo(id) {
@@ -351,7 +352,7 @@ class MainActivity : ComponentActivity() {
                         complete(id, true, enabled.toString())
                     }
                     "storeConfig" -> complete(id, true, JSONObject().put("url", "").put("configured", false).toString())
-                    "chooseBase", "storeSetUrl", "storeInstall" ->
+                    "storeSetUrl", "storeInstall" ->
                         throw UnsupportedOperationException(when (method) {
                             "storeSetUrl", "storeInstall" -> "The GorillaRinth server catalog is not connected yet."
                             else -> "This game-management action is not implemented yet."
