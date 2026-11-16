@@ -443,6 +443,7 @@ class MainActivity : ComponentActivity() {
                 JSONObject(getSharedPreferences("qmod", MODE_PRIVATE).getString("lastGameVersionMatch", "{}") ?: "{}")
             }.getOrDefault(JSONObject()))
             .put("stagedApk", File(filesDir, "gorilla_tag_download.apk").let { it.exists() && it.length() > 0L })
+            .put("patchedApk", File(filesDir, "gorilla_tag_patched.apk").let { it.exists() && it.length() > 0L })
             .put("version", "0.1.0")
     }
 
@@ -713,6 +714,16 @@ class MainActivity : ComponentActivity() {
                     }
                     "downloadMatchedApk" -> runOnUiThread { promptForMetaToken(id) }
                     "installImportedApk" -> onIo(id) { startPackageInstall(File(filesDir, "gorilla_tag_download.apk")) }
+                    "patchGameApk" -> onIo(id) {
+                        val patched = QuestLoaderApkPatcher.patch(this, File(filesDir, "gorilla_tag_download.apk"))
+                        JSONObject().put("fileName", patched.name).put("size", patched.length()).toString()
+                    }
+                    "installPatchedApk" -> onIo(id) { startPackageInstall(File(filesDir, "gorilla_tag_patched.apk")) }
+                    "uninstallOfficialGame" -> runOnUiThread {
+                        val uninstall = Intent(Intent.ACTION_DELETE, Uri.parse("package:com.AnotherAxiom.GorillaTag"))
+                        startActivity(uninstall)
+                        complete(id, true, "Android opened the Gorilla Tag uninstall confirmation. Confirm it, then return and install the patched APK.")
+                    }
                     "importDownloadedApk" -> runOnUiThread {
                         pendingApkImportId = id
                         apkPicker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream"))
