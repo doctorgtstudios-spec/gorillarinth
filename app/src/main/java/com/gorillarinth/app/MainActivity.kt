@@ -151,10 +151,10 @@ private fun GorillaRinthApp() {
                             Spacer(Modifier.height(12.dp))
                             ActionRow("Patch OBB", "Create a backup and prepare the game files", Icons.Filled.Build, selectedTheme.accent) { page = "Patcher" }
                             ActionRow("Choose a ZIP", archiveName ?: "Select one mod archive", Icons.Filled.FileOpen, selectedTheme.accent) { page = "Mods" }
-                            ActionRow("Launch Gorilla Tag", "Available after a compatible loader is configured", Icons.Filled.PlayArrow, selectedTheme.accent) { }
+                            ActionRow("Launch Gorilla Tag", "Open the installed game", Icons.Filled.PlayArrow, selectedTheme.accent) { launchGorillaTag(context) }
                         }
                         Spacer(Modifier.height(12.dp))
-                        Text("Prototype build • patching and launch are not active yet", color = muted, fontSize = 11.sp)
+                        Text("ZIP import is available. Game launch opens the installed Gorilla Tag app; mod installation and patching are not active yet.", color = muted, fontSize = 11.sp)
                     }
                     "Mods" -> {
                         Text("Your mods", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
