@@ -2,16 +2,35 @@
 
 An Android companion and mod-management prototype for Gorilla Tag on Quest.
 
-## Current prototype
+## Current features
 - Original GorillaRinth interface with yellow default branding.
-- Home, Mods, Setup, Game, and Settings views.
-- Theme selector with yellow, blue, cyan, purple, pink, red, orange, green, and RGB options.
-- Local ZIP archive import with safe extraction into private app storage.
-- Launch button opens Gorilla Tag when installed.
+- Theme selector and local ZIP mod import.
+- Wireless ADB pairing using the Android 11+ Wireless Debugging pairing code.
+- Automatic discovery of ADB pairing and connection ports over mDNS.
+- Reconnection to a previously paired Quest when Wireless debugging advertises its ADB endpoint.
+- Pulls and saves the original Gorilla Tag OBB locally and creates a second backup on the Quest before changing it.
+- Applies ZIP overlay patches to the OBB and can restore the saved original.
+- Launches and force-stops Gorilla Tag over ADB.
 - GitHub Actions builds a debug APK automatically.
 
-## Important status
-This is an early prototype, not a working Gorilla Tag mod loader. Wireless ADB pairing, Quest file access, OBB patching, compatible mod installation, and game-side loading are not implemented. ZIP import only inspects files locally; it does not activate mods.
+## Wireless ADB setup
+1. Put GorillaRinth and the Quest on the same Wi-Fi network.
+2. Open Android Developer options, enable Wireless debugging, and choose **Pair device with pairing code**.
+3. GorillaRinth discovers the pairing port automatically. Enter the six-digit code shown by Android.
+4. Keep Wireless debugging enabled. The app discovers the separate connection port and saves the pairing endpoint for reconnecting.
+
+## OBB mod ZIP layout
+A mod archive must contain a `mod.json` manifest and an `obb/` directory. Files under `obb/` are treated as paths inside the game's OBB archive. For example:
+
+```
+MyMod.zip
+├── mod.json
+└── obb/
+    └── assets/
+        └── example.dat
+```
+
+GorillaRinth copies the original OBB to private app storage and to a `.gorillarinth.bak` file on the Quest before replacing it. Applying a mod merges the files under `obb/` into the OBB ZIP, replacing entries with matching paths. Use **Restore original** to put the backup back. This overlay format only works for mods that supply compatible replacement/addition files; it does not translate arbitrary mod formats or bypass game integrity checks.
 
 ## Build
 Push to `main` or run the **Build GorillaRinth APK** workflow manually from the Actions tab. Download the `GorillaRinth-debug-apk` artifact from the successful run.
