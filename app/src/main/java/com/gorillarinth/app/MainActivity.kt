@@ -523,7 +523,7 @@ class MainActivity : ComponentActivity() {
             } ?: error("Could not read selected archive.")
             val modJson = temp.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) }
                 ?: temp.walkTopDown().firstOrNull { it.isFile && it.name.equals("manifest.json", true) }
-            val nativeLibraries = temp.walkTopDown().filter {
+            var nativeLibraries = temp.walkTopDown().filter {
                 it.isFile && it.extension.equals("so", true)
             }.toList()
             val parsed = if (modJson != null) {
@@ -544,6 +544,22 @@ class MainActivity : ComponentActivity() {
                     .put("format", "native-library")
                     .also { it.put("nativeLibraries", JSONArray(labels)) }
                     .also { it.writeTo(File(temp, "manifest.json")) }
+            }
+            // QMOD manifests declare native payloads in modFiles (not only libraryFiles).
+            val dependencyReport = resolveQmodDependencies(temp, parsed)
+            if (dependencyReport.length() > 0) parsed.put("resolvedDependencies", dependencyReport)
+            nativeLibraries = temp.walkTopDown().filter {
+                it.isFile && it.extension.equals("so", true)
+            }.toList()
+            val declaredModFiles = parsed.optJSONArray("modFiles") ?: JSONArray()
+            val declaredLibraryFiles = parsed.optJSONArray("libraryFiles") ?: JSONArray()
+            val declaresNativePayload = (0 until declaredModFiles.length()).any {
+                declaredModFiles.optString(it).endsWith(".so", true)
+            } || (0 until declaredLibraryFiles.length()).any {
+                declaredLibraryFiles.optString(it).endsWith(".so", true)
+            }
+            if (nativeLibraries.isNotEmpty() && (declaresNativePayload || parsed.has("packageId"))) {
+                parsed.put("format", "native-library")
             }
             // Inspect every native library before saving the imported mod.
             if (nativeLibraries.isNotEmpty()) {
@@ -592,6 +608,93 @@ class MainActivity : ComponentActivity() {
             temp.deleteRecursively()
             false to (e.message ?: "Import failed.")
         }
+    }
+
+    private fun resolveQmodDependencies(root: File, manifest: JSONObject): JSONArray {
+        val dependencies = manifest.optJSONArray("dependencies") ?: return JSONArray()
+        val report = JSONArray()
+        val dependencyRoot = File(root, "resolved_dependencies")
+        for (index in 0 until dependencies.length()) {
+            val dependency = dependencies.optJSONObject(index) ?: continue
+            val id = dependency.optString("id").trim()
+            val download = dependency.optString("downloadIfMissing").trim()
+            if (id.isBlank() || download.isBlank()) continue
+            val url = Regex("\\[([^]]+)]\\((https?://[^)]+)\\)").find(download)?.groupValues?.get(2) ?: download
+            require(url.startsWith("https://") || url.startsWith("http://")) {
+                "Dependency " + id + " has an invalid download URL."
+            }
+            val depDir = File(dependencyRoot, id)
+            if (!depDir.exists()) {
+                depDir.mkdirs()
+                val archive = File(depDir, "dependency.qmod")
+                val connection = java.net.URL(url).openConnection().apply {
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                    setRequestProperty("User-Agent", "GorillaRinth/0.1")
+                }
+                connection.getInputStream().use { input ->
+                    archive.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= 128L * 1024 * 1024) { "Dependency " + id + " exceeds the 128 MB download limit." }
+                            output.write(buffer, 0, count)
+                        }
+                    }
+                }
+                val extracted = File(depDir, "contents").apply { mkdirs() }
+                ZipInputStream(archive.inputStream().buffered()).use { zip ->
+                    var entries = 0
+                    while (true) {
+                        val entry = zip.nextEntry ?: break
+                        entries++
+                        require(entries <= 500) { "Dependency " + id + " contains too many files." }
+                        val out = File(extracted, entry.name)
+                        val base = extracted.canonicalPath + File.separator
+                        require(out.canonicalPath.startsWith(base) || out.canonicalPath == extracted.canonicalPath) {
+                            "Dependency " + id + " contains an unsafe archive path."
+                        }
+                        if (entry.isDirectory) out.mkdirs() else {
+                            out.parentFile?.mkdirs()
+                            out.outputStream().use { sink -> zip.copyTo(sink) }
+                        }
+                        zip.closeEntry()
+                    }
+                }
+                archive.delete()
+            }
+            val depManifestFile = depDir.walkTopDown().firstOrNull {
+                it.isFile && it.name.equals("mod.json", true)
+            } ?: error("Dependency " + id + " downloaded, but its mod.json is missing.")
+            val depManifest = JSONObject(depManifestFile.readText())
+            val depId = depManifest.optString("id", id)
+            require(depId.equals(id, true)) {
+                "Dependency URL for " + id + " returned mod " + depManifest.optString("id") + "."
+            }
+            val payloadNames = JSONArray()
+            listOf("modFiles", "libraryFiles").forEach { key ->
+                val files = depManifest.optJSONArray(key) ?: return@forEach
+                for (i in 0 until files.length()) payloadNames.put(files.optString(i))
+            }
+            val copied = JSONArray()
+            for (i in 0 until payloadNames.length()) {
+                val relative = payloadNames.optString(i)
+                if (!relative.endsWith(".so", true)) continue
+                val source = depManifestFile.parentFile?.let { File(it, relative) }
+                    ?: error("Dependency " + id + " has an invalid manifest location.")
+                require(source.isFile) { "Dependency " + id + " is missing native file " + relative + "." }
+                val destination = File(root, "dependency_native/" + id + "/" + source.name)
+                destination.parentFile?.mkdirs()
+                source.copyTo(destination, overwrite = true)
+                copied.put(destination.relativeTo(root).invariantSeparatorsPath)
+            }
+            report.put(JSONObject().put("id", id).put("version", depManifest.optString("version"))
+                .put("nativeFiles", copied))
+        }
+        return report
     }
 
     private fun inspectNativeLibrary(file: File): JSONObject {
