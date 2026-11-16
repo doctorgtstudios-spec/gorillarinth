@@ -53,16 +53,19 @@ class MainActivity : ComponentActivity() {
         }
         Thread {
             try {
+                val stagedTemp = File(filesDir, "gorilla_tag_download.apk.tmp")
                 val staged = File(filesDir, "gorilla_tag_download.apk")
                 contentResolver.openInputStream(uri).use { input ->
                     requireNotNull(input) { "Could not open the selected APK." }
-                    FileOutputStream(staged).use { output -> input.copyTo(output) }
+                    FileOutputStream(stagedTemp).use { output -> input.copyTo(output) }
                 }
-                val info = packageManager.getPackageArchiveInfo(staged.absolutePath, 0)
+                val info = packageManager.getPackageArchiveInfo(stagedTemp.absolutePath, 0)
                     ?: throw IllegalArgumentException("The selected file is not a valid Android APK.")
                 require(info.packageName == "com.AnotherAxiom.GorillaTag") {
                     "This APK is for ${info.packageName}, not Gorilla Tag."
                 }
+                if (staged.exists()) require(staged.delete()) { "Could not replace the previously imported APK." }
+                require(stagedTemp.renameTo(staged)) { "Could not save the imported Gorilla Tag APK." }
                 val result = JSONObject()
                     .put("packageName", info.packageName)
                     .put("versionName", info.versionName ?: "Unknown")
@@ -71,7 +74,7 @@ class MainActivity : ComponentActivity() {
                     .put("size", staged.length())
                 runOnUiThread { complete(id, true, result.toString()) }
             } catch (e: Exception) {
-                File(filesDir, "gorilla_tag_download.apk").delete()
+                File(filesDir, "gorilla_tag_download.apk.tmp").delete()
                 runOnUiThread { complete(id, false, e.message ?: "Could not import APK.") }
             }
         }.start()
