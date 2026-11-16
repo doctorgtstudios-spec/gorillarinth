@@ -3,7 +3,6 @@ package com.gorillarinth.app
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.provider.OpenableColumns
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -11,14 +10,19 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import com.flyfishxu.kadb.Kadb
+import com.flyfishxu.kadb.mdns.KadbMdnsAndroid
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
+import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
+    private lateinit var mdns: KadbMdnsAndroid
+    @Volatile private var adbClient: Kadb? = null
     private var pendingImportId: Int? = null
     private var importedManifest: JSONObject? = null
 
@@ -41,6 +45,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        mdns = KadbMdnsAndroid(applicationContext)
+        mdns.start()
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -54,9 +60,67 @@ class MainActivity : ComponentActivity() {
         web.loadUrl("file:///android_asset/gorillarinth/index.html")
     }
 
+    override fun onDestroy() {
+        runCatching { adbClient?.close() }
+        runCatching { mdns.close() }
+        super.onDestroy()
+    }
+
     private fun complete(id: Int, ok: Boolean, value: String) {
         val encoded = if (ok) value else JSONObject.quote(value)
         runOnUiThread { web.evaluateJavascript("window.__drDone($id, $ok, $encoded)", null) }
+    }
+
+    private fun onIo(id: Int, action: () -> String) {
+        Thread {
+            try { complete(id, true, action()) }
+            catch (e: Exception) { complete(id, false, e.message ?: "ADB action failed.") }
+        }.start()
+    }
+
+    private fun pairPort(): Int =
+        mdns.state.value.pairDevices.firstOrNull()?.port ?: 0
+
+    private fun connectTo(host: String, port: Int): Kadb {
+        require(port in 1..65535) { "Wireless debugging connection port was not found." }
+        adbClient?.let { runCatching { it.close() } }
+        val client = Kadb.create(host, port, connectTimeout = 8000, socketTimeout = 15000)
+        val response = client.shell("echo gorillarinth")
+        check(response.exitCode == 0 && response.allOutput.contains("gorillarinth")) {
+            "ADB connected, but the headset did not answer the test command."
+        }
+        adbClient = client
+        getSharedPreferences("device", MODE_PRIVATE).edit()
+            .putString("host", host).putInt("connectPort", port).apply()
+        return client
+    }
+
+    private fun pairWireless(port: Int, code: String, requestedConnectPort: Int): String {
+        require(code.matches(Regex("\\d{6}"))) { "Enter the six-digit Wireless debugging pairing code." }
+        val endpoint = mdns.state.value.pairDevices.firstOrNull { it.port == port }
+            ?: mdns.state.value.pairDevices.firstOrNull()
+            ?: error("Pairing port not detected. Open Wireless debugging > Pair device with pairing code, then wait a moment.")
+        runBlocking { Kadb.pair(endpoint.host, port, code) }
+
+        val connectEndpoint = mdns.state.value.connectDevices.firstOrNull {
+            it.host == endpoint.host && (requestedConnectPort == 0 || it.port == requestedConnectPort)
+        } ?: mdns.state.value.connectDevices.firstOrNull {
+            requestedConnectPort == 0 || it.port == requestedConnectPort
+        }
+        val connectPort = if (requestedConnectPort > 0) requestedConnectPort else
+            connectEndpoint?.port ?: error("Pairing succeeded, but the ADB connection port was not discovered. Leave Wireless debugging enabled and retry Connect.")
+        connectTo(endpoint.host, connectPort)
+        return JSONObject().put("paired", true).put("host", endpoint.host)
+            .put("port", connectPort).toString()
+    }
+
+    private fun reconnectWireless(): Boolean {
+        val prefs = getSharedPreferences("device", MODE_PRIVATE)
+        val savedHost = prefs.getString("host", null) ?: return false
+        val live = mdns.state.value.connectDevices.firstOrNull { it.host == savedHost }
+        val host = live?.host ?: savedHost
+        val port = live?.port ?: prefs.getInt("connectPort", 0)
+        return runCatching { connectTo(host, port); true }.getOrDefault(false)
     }
 
     private fun state(): JSONObject {
@@ -82,10 +146,13 @@ class MainActivity : ComponentActivity() {
             JSONObject().put("versionName", info.versionName ?: "Unknown")
                 .put("versionCode", info.versionCode.toLong()).put("running", false)
         }
-        val autoReconnect = getSharedPreferences("device", MODE_PRIVATE).getBoolean("autoReconnect", false)
+        val prefs = getSharedPreferences("device", MODE_PRIVATE)
+        val paired = prefs.getString("host", null) != null
+        val connected = adbClient?.connectionCheck() == true
         return JSONObject()
             .put("library", library)
-            .put("device", JSONObject().put("state", "none").put("paired", false).put("autoReconnect", autoReconnect).put("model", "Quest"))
+            .put("device", JSONObject().put("state", if (connected) "connected" else if (paired) "paired" else "none")
+                .put("paired", paired).put("autoReconnect", prefs.getBoolean("autoReconnect", false)).put("model", "Quest"))
             .put("game", game)
             .put("base", JSONObject().put("usable", false).put("fromModded", false).put("name", ""))
             .put("checks", JSONArray())
@@ -119,23 +186,19 @@ class MainActivity : ComponentActivity() {
                     }
                     "openDevSettings" -> {
                         runOnUiThread {
-                            val developerSettings = Intent("android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
-                                .setPackage("com.android.settings")
+                            val intent = Intent("android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            try {
-                                startActivity(developerSettings)
-                            } catch (_: Exception) {
-                                try {
-                                    startActivity(Intent("android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
-                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                                } catch (_: Exception) {
-                                    Toast.makeText(this@MainActivity, "Android Developer options are unavailable on this device.", Toast.LENGTH_LONG).show()
-                                }
+                            runCatching { startActivity(intent) }.onFailure {
+                                Toast.makeText(this@MainActivity, "Android Developer options are unavailable on this device.", Toast.LENGTH_LONG).show()
                             }
                         }
                         complete(id, true, "true")
                     }
-                    "pairingPort" -> complete(id, true, "0")
+                    "pairingPort" -> complete(id, true, pairPort().toString())
+                    "pair" -> onIo(id) {
+                        pairWireless(args.optInt(0), args.optString(1), args.optInt(2)).also { }
+                    }
+                    "reconnect" -> onIo(id) { reconnectWireless().toString() }
                     "toggle" -> {
                         val modId = args.optString(0)
                         val prefs = getSharedPreferences("mods", MODE_PRIVATE)
@@ -157,16 +220,13 @@ class MainActivity : ComponentActivity() {
                     }
                     "setAutoReconnect" -> {
                         val enabled = args.optBoolean(0, false)
-                        getSharedPreferences("device", MODE_PRIVATE).edit()
-                            .putBoolean("autoReconnect", enabled).apply()
+                        getSharedPreferences("device", MODE_PRIVATE).edit().putBoolean("autoReconnect", enabled).apply()
                         complete(id, true, enabled.toString())
                     }
-                    "reconnect" -> complete(id, true, "false")
                     "storeConfig" -> complete(id, true, JSONObject().put("url", "").put("configured", false).toString())
                     "pair", "pullBase", "chooseBase", "restoreBase", "stopGame", "apply", "storeSetUrl", "storeInstall" ->
                         throw UnsupportedOperationException(when (method) {
-                            "pair" -> "Wireless ADB pairing is not implemented yet."
-                            "apply" -> "Game-side mod installation is not implemented yet. Imported files are only inspected."
+                            "apply" -> "OBB patching needs a supported mod patch layout; no patch format is defined in the imported mod manifest yet."
                             "storeSetUrl", "storeInstall" -> "The GorillaRinth server catalog is not connected yet."
                             else -> "This game-management action is not implemented yet."
                         })
