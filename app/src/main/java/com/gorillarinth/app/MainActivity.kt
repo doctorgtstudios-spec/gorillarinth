@@ -795,10 +795,8 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                    "storeList" -> complete(id, true, JSONObject()
-                        .put("configured", false).put("mods", JSONArray())
-                        .put("offline", true).put("offlineReason", "The GorillaRinth server catalog will be connected later.")
-                        .put("name", "GorillaRinth Store").toString())
+                    "storeList" -> onIo(id) { loadGitHubQmodProvider().toString() }
+                    "storeInstall" -> onIo(id) { installFromGitHubQmodProvider(args.optString(0)) }
                     "installLocal" -> runOnUiThread {
                         pendingImportId = id
                         importPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
@@ -882,13 +880,135 @@ class MainActivity : ComponentActivity() {
                         getSharedPreferences("mod_store", MODE_PRIVATE).edit().putString("url", url).apply()
                         complete(id, true, "true")
                     }
-                    "storeInstall" -> throw UnsupportedOperationException("QMOD provider downloads are not connected yet.")
                     else -> throw IllegalArgumentException("Unsupported action: $method")
                 }
             } catch (e: Exception) {
                 complete(id, false, e.message ?: "Action failed.")
             }
         }
+    }
+
+    private fun githubJson(url: String): JSONObject {
+        val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        try {
+            connection.connectTimeout = 12000
+            connection.readTimeout = 20000
+            connection.setRequestProperty("Accept", "application/vnd.github+json")
+            connection.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            connection.setRequestProperty("User-Agent", "GorillaRinth-Android")
+            val code = connection.responseCode
+            require(code in 200..299) {
+                if (code == 403 || code == 429) "GitHub rate limit reached. Wait a minute and refresh."
+                else "GitHub returned HTTP $code while loading the QMOD provider."
+            }
+            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            require(body.length <= 8 * 1024 * 1024) { "GitHub response is too large." }
+            return JSONObject(body)
+        } finally { connection.disconnect() }
+    }
+
+    private fun githubRepoParts(): Pair<String, String> {
+        val prefs = getSharedPreferences("mod_store", MODE_PRIVATE)
+        val address = prefs.getString("url", "https://github.com/visionnvoiod/Quest-Mods")
+            ?.trim()?.trimEnd('/') ?: "https://github.com/visionnvoiod/Quest-Mods"
+        val match = Regex("^https://github\\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)(?:\\.git)?$",
+            RegexOption.IGNORE_CASE).matchEntire(address)
+            ?: error("Provider URL must be a GitHub repository address, such as https://github.com/owner/repository.")
+        return match.groupValues[1] to match.groupValues[2].removeSuffix(".git")
+    }
+
+    private fun loadGitHubQmodProvider(): JSONObject {
+        val (owner, repo) = githubRepoParts()
+        val base = "https://api.github.com/repos/$owner/$repo"
+        val metadata = githubJson(base)
+        val branch = metadata.optString("default_branch", "main")
+        require(branch.isNotBlank()) { "Could not determine the GitHub repository's default branch." }
+        val tree = githubJson("$base/git/trees/${java.net.URLEncoder.encode(branch, "UTF-8")}?recursive=1")
+        require(!tree.optBoolean("truncated", false)) { "This repository is too large to browse using its GitHub tree." }
+        val nodes = tree.optJSONArray("tree") ?: JSONArray()
+        val mods = JSONArray()
+        val urls = JSONObject()
+        val prefs = getSharedPreferences("mods", MODE_PRIVATE)
+        for (i in 0 until nodes.length()) {
+            val node = nodes.optJSONObject(i) ?: continue
+            val path = node.optString("path")
+            if (node.optString("type") != "blob" || !path.endsWith(".qmod", true)) continue
+            val size = node.optLong("size", 0L)
+            if (size <= 0L || size > 128L * 1024 * 1024) continue
+            val id = path
+            val encodedPath = path.split("/").joinToString("/") {
+                java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20")
+            }
+            val downloadUrl = "https://raw.githubusercontent.com/$owner/$repo/$branch/$encodedPath"
+            urls.put(id, downloadUrl)
+            val displayName = path.substringAfterLast('/').removeSuffix(".qmod")
+                .replace('_', ' ').replace('-', ' ').trim()
+            mods.put(JSONObject()
+                .put("id", id)
+                .put("name", displayName.ifBlank { path.substringAfterLast('/') })
+                .put("creator", owner)
+                .put("summary", "QMOD archive from $owner/$repo")
+                .put("version", "QMOD")
+                .put("bytes", size)
+                .put("updated", node.optString("last_commit_date", ""))
+                .put("tags", JSONArray().put("QMOD"))
+                .put("installed", prefs.getBoolean("storeInstalled:$id", false))
+                .put("update", false))
+        }
+        getSharedPreferences("mod_store", MODE_PRIVATE).edit()
+            .putString("itemUrls", urls.toString()).apply()
+        return JSONObject()
+            .put("configured", true)
+            .put("mods", mods)
+            .put("offline", false)
+            .put("name", metadata.optString("full_name", "$owner/$repo"))
+    }
+
+    private fun downloadProviderQmod(url: String, destination: File) {
+        require(url.startsWith("https://raw.githubusercontent.com/") ||
+            url.startsWith("https://github.com/")) { "The provider returned an untrusted download URL." }
+        val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        try {
+            connection.connectTimeout = 15000
+            connection.readTimeout = 45000
+            connection.instanceFollowRedirects = true
+            connection.setRequestProperty("User-Agent", "GorillaRinth-Android")
+            val code = connection.responseCode
+            require(code in 200..299) { "QMOD download failed with HTTP $code." }
+            destination.parentFile?.mkdirs()
+            connection.inputStream.use { input ->
+                destination.outputStream().use { output ->
+                    val buffer = ByteArray(16384)
+                    var total = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= 128L * 1024 * 1024) { "QMOD exceeds the 128 MB download limit." }
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            require(destination.length() > 100L) { "The downloaded QMOD is empty or incomplete." }
+        } finally { connection.disconnect() }
+    }
+
+    private fun installFromGitHubQmodProvider(itemId: String): String {
+        require(itemId.isNotBlank() && itemId.length <= 1024) { "Invalid provider item." }
+        val urls = JSONObject(getSharedPreferences("mod_store", MODE_PRIVATE)
+            .getString("itemUrls", "{}") ?: "{}")
+        val url = urls.optString(itemId)
+        require(url.isNotBlank()) { "This QMOD is no longer in the provider list. Refresh and try again." }
+        val archive = File(cacheDir, "provider_download.qmod")
+        archive.delete()
+        try {
+            downloadProviderQmod(url, archive)
+            val imported = importArchive(Uri.fromFile(archive))
+            check(imported.first) { imported.second }
+            getSharedPreferences("mods", MODE_PRIVATE).edit()
+                .putBoolean("storeInstalled:$itemId", true).apply()
+            return JSONObject().put("name", imported.second).put("source", url).toString()
+        } finally { archive.delete() }
     }
 
     private fun importArchive(uri: Uri): Pair<Boolean, String> {
