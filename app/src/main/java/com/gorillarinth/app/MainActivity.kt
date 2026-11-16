@@ -2,400 +2,211 @@ package com.gorillarinth.app
 
 import android.content.Intent
 import android.net.Uri
-import android.provider.OpenableColumns
 import android.os.Bundle
+import android.provider.OpenableColumns
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import org.json.JSONObject
 import java.util.zip.ZipInputStream
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-
-private data class AppTheme(val name: String, val accent: Color, val dark: Boolean)
-private val themes = listOf(
-    AppTheme("Driftrinth Blue", Color(0xFF5B9BFF), true),
-    AppTheme("Green", Color(0xFF54D68B), true),
-    AppTheme("Blue", Color(0xFF62A9FF), true),
-    AppTheme("Purple", Color(0xFFB58AFF), true),
-    AppTheme("Dark", Color(0xFFB7BBC5), true),
-    AppTheme("Light", Color(0xFFB18A00), false)
-)
 
 class MainActivity : ComponentActivity() {
+    private lateinit var web: WebView
+    private var pendingImportId: Int? = null
+    private var importedManifest: JSONObject? = null
+
+    private val importPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val id = pendingImportId ?: return@registerForActivityResult
+        pendingImportId = null
+        if (uri == null) {
+            complete(id, false, "Import cancelled.")
+            return@registerForActivityResult
+        }
+        runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        Thread {
+            val result = importArchive(uri)
+            runOnUiThread {
+                if (result.first) complete(id, true, JSONObject().put("name", result.second).toString())
+                else complete(id, false, result.second)
+            }
+        }.start()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { GorillaRinthApp() }
+        web = WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.allowFileAccess = true
+            settings.allowContentAccess = true
+            webChromeClient = WebChromeClient()
+            webViewClient = WebViewClient()
+            addJavascriptInterface(NativeBridge(), "GorillaRinthNative")
+        }
+        setContentView(web)
+        web.loadUrl("file:///android_asset/driftrinth/index.html")
     }
-}
 
-@Composable
-private fun GorillaRinthApp() {
-    var page by remember { mutableStateOf("Home") }
-    var selectedTheme by remember { mutableStateOf(themes.first()) }
-    var archiveName by remember { mutableStateOf<String?>(null) }
-    var archiveUri by remember { mutableStateOf<Uri?>(null) }
-    var importStatus by remember { mutableStateOf("No archive imported yet.") }
-    var importing by remember { mutableStateOf(false) }
-    var questModManifest by remember { mutableStateOf<QuestModManifest?>(null) }
-    val scope = rememberCoroutineScope()
-    var pairingCode by remember { mutableStateOf("") }
-    val context = LocalContext.current
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        uri?.let {
-            val name = context.contentResolver.query(
-                it, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
-            )?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
-            } ?: it.lastPathSegment?.substringAfterLast('/') ?: "Selected file"
-            if (name.endsWith(".zip", ignoreCase = true) || name.endsWith(".qmod", ignoreCase = true)) {
-                archiveName = name
-                archiveUri = it
-                importStatus = "Archive selected. Ready to inspect."
-                runCatching {
-                    context.contentResolver.takePersistableUriPermission(
-                        it, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    )
+    private fun complete(id: Int, ok: Boolean, value: String) {
+        val encoded = JSONObject.quote(value)
+        web.evaluateJavascript("window.__drDone($id, $ok, $encoded)", null)
+    }
+
+    private fun state(): JSONObject {
+        val library = JSONArray()
+        val manifest = readManifest()
+        if (manifest != null) {
+            val id = manifest.optString("id", manifest.optString("name", "local-mod"))
+            val enabled = getSharedPreferences("mods", MODE_PRIVATE).getBoolean(id, false)
+            val mod = JSONObject()
+                .put("id", id)
+                .put("name", manifest.optString("name", "Imported mod"))
+                .put("creator", manifest.optString("author", "Unknown"))
+                .put("summary", "Imported locally • v" + manifest.optString("version", "unknown"))
+                .put("version", manifest.optString("version", "unknown"))
+                .put("enabled", enabled)
+                .put("bytes", File(filesDir, "imported_mod").walkTopDown().filter { it.isFile }.sumOf { it.length() })
+                .put("added", System.currentTimeMillis())
+            library.put(mod)
+        }
+        val gameIntent = packageManager.getLaunchIntentForPackage("com.AnotherAxiom.GorillaTag")
+        val game = if (gameIntent == null) JSONObject.NULL else {
+            val info = packageManager.getPackageInfo("com.AnotherAxiom.GorillaTag", 0)
+            JSONObject().put("versionName", info.versionName ?: "Unknown")
+                .put("versionCode", info.longVersionCode).put("running", false)
+        }
+        return JSONObject()
+            .put("library", library)
+            .put("device", JSONObject().put("state", "none").put("paired", false).put("autoReconnect", false).put("model", "Quest"))
+            .put("game", game)
+            .put("base", JSONObject().put("usable", false).put("fromModded", false).put("name", ""))
+            .put("checks", JSONArray())
+            .put("busy", JSONObject.NULL)
+            .put("appliedAt", JSONObject.NULL)
+            .put("capacity", 0).put("used", 0)
+            .put("pending", false).put("canApply", false)
+            .put("version", "0.1.0")
+    }
+
+    private inner class NativeBridge {
+        @JavascriptInterface
+        fun call(id: Int, method: String, rawArgs: String) {
+            try {
+                val args = JSONArray(rawArgs)
+                when (method) {
+                    "state" -> complete(id, true, state().toString())
+                    "storeList" -> complete(id, true, JSONObject()
+                        .put("configured", false).put("mods", JSONArray())
+                        .put("offline", true).put("offlineReason", "The GorillaRinth server catalog will be connected later.")
+                        .put("name", "GorillaRinth Store").toString())
+                    "installLocal" -> runOnUiThread {
+                        pendingImportId = id
+                        importPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                    }
+                    "launch" -> {
+                        val intent = packageManager.getLaunchIntentForPackage("com.AnotherAxiom.GorillaTag")
+                            ?: throw IllegalStateException("Gorilla Tag is not installed.")
+                        runOnUiThread { startActivity(intent) }
+                        complete(id, true, "true")
+                    }
+                    "openDevSettings" -> {
+                        runOnUiThread { startActivity(Intent("android.settings.APPLICATION_DEVELOPMENT_SETTINGS")) }
+                        complete(id, true, "true")
+                    }
+                    "pairingPort" -> complete(id, true, "0")
+                    "toggle" -> {
+                        val modId = args.optString(0)
+                        val prefs = getSharedPreferences("mods", MODE_PRIVATE)
+                        prefs.edit().putBoolean(modId, !prefs.getBoolean(modId, false)).apply()
+                        complete(id, true, "true")
+                    }
+                    "setMany" -> {
+                        val ids = args.optJSONArray(0) ?: JSONArray()
+                        val on = args.optBoolean(1)
+                        val edit = getSharedPreferences("mods", MODE_PRIVATE).edit()
+                        for (i in 0 until ids.length()) edit.putBoolean(ids.optString(i), on)
+                        edit.apply()
+                        complete(id, true, "true")
+                    }
+                    "remove" -> {
+                        File(filesDir, "imported_mod").deleteRecursively()
+                        getSharedPreferences("mods", MODE_PRIVATE).edit().clear().apply()
+                        complete(id, true, "true")
+                    }
+                    "setAutoReconnect" -> complete(id, true, "false")
+                    "reconnect" -> complete(id, true, "false")
+                    "storeConfig" -> complete(id, true, JSONObject().put("url", "").put("configured", false).toString())
+                    "pair", "pullBase", "chooseBase", "restoreBase", "stopGame", "apply", "storeSetUrl", "storeInstall" ->
+                        throw UnsupportedOperationException(when (method) {
+                            "pair" -> "Wireless ADB pairing is not implemented yet."
+                            "apply" -> "Game-side mod installation is not implemented yet. Imported files are only inspected."
+                            "storeSetUrl", "storeInstall" -> "The GorillaRinth server catalog is not connected yet."
+                            else -> "This game-management action is not implemented yet."
+                        })
+                    else -> throw IllegalArgumentException("Unsupported action: $method")
                 }
-            } else {
-                archiveName = null
-                archiveUri = null
-                importStatus = "Please select a .zip or .qmod archive."
+            } catch (e: Exception) {
+                complete(id, false, e.message ?: "Action failed.")
             }
         }
     }
-    val bg = if (selectedTheme.dark) Color(0xFF101722) else Color(0xFFF4F4F0)
-    val panel = if (selectedTheme.dark) Color(0xFF1A2635) else Color.White
-    val fg = if (selectedTheme.dark) Color(0xFFF4F4F4) else Color(0xFF171717)
-    val muted = if (selectedTheme.dark) Color(0xFF9AA1AD) else Color(0xFF666666)
 
-    MaterialTheme(
-        colorScheme = if (selectedTheme.dark)
-            darkColorScheme(primary = selectedTheme.accent, background = bg, surface = panel, onPrimary = Color(0xFF171717), onBackground = fg, onSurface = fg)
-        else lightColorScheme(primary = selectedTheme.accent, background = bg, surface = panel, onPrimary = Color.White, onBackground = fg, onSurface = fg)
-    ) {
-        Scaffold(
-            containerColor = bg,
-            bottomBar = {
-                NavigationBar(containerColor = panel, tonalElevation = 0.dp) {
-                    listOf(
-                        Triple("Home", Icons.Filled.Home, "Home"),
-                        Triple("Mods", Icons.Filled.Extension, "Mods"),
-                        Triple("Patcher", Icons.Filled.Build, "Patcher"),
-                        Triple("Themes", Icons.Filled.Palette, "Themes"),
-                        Triple("Settings", Icons.Filled.Settings, "Settings")
-                    ).forEach { (label, icon, _) ->
-                        NavigationBarItem(
-                            selected = page == label,
-                            onClick = { page = label },
-                            icon = { Icon(icon, contentDescription = label) },
-                            label = { Text(label, fontSize = 10.sp) },
-                            colors = NavigationBarItemDefaults.colors(selectedIconColor = selectedTheme.accent, indicatorColor = selectedTheme.accent.copy(alpha = .16f))
-                        )
+    private fun importArchive(uri: Uri): Pair<Boolean, String> {
+        val temp = File(filesDir, "imported_mod_tmp")
+        val root = File(filesDir, "imported_mod")
+        return try {
+            temp.deleteRecursively()
+            if (!temp.mkdirs()) error("Could not create import folder.")
+            var count = 0
+            var bytes = 0L
+            val canonicalRoot = temp.canonicalPath + File.separator
+            contentResolver.openInputStream(uri)?.use { raw ->
+                ZipInputStream(raw).use { zip ->
+                    while (true) {
+                        val entry = zip.nextEntry ?: break
+                        count++
+                        if (count > 500) error("Archive contains too many entries (limit 500).")
+                        val out = File(temp, entry.name)
+                        if (!out.canonicalPath.startsWith(canonicalRoot) && out.canonicalPath != temp.canonicalPath) error("Unsafe ZIP path.")
+                        if (entry.isDirectory) out.mkdirs() else {
+                            out.parentFile?.mkdirs()
+                            FileOutputStream(out).use { sink ->
+                                val buffer = ByteArray(8192)
+                                while (true) {
+                                    val n = zip.read(buffer)
+                                    if (n < 0) break
+                                    bytes += n
+                                    if (bytes > 256L * 1024 * 1024) error("Archive exceeds the 256 MB extraction limit.")
+                                    sink.write(buffer, 0, n)
+                                }
+                            }
+                        }
+                        zip.closeEntry()
                     }
                 }
-            }
-        ) { padding ->
-            Column(Modifier.fillMaxSize().background(bg).padding(padding).padding(horizontal = 20.dp)) {
-                Row(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(42.dp).background(selectedTheme.accent, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                        Text("G", color = Color(0xFF171717), fontWeight = FontWeight.Black, fontSize = 25.sp)
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("GorillaRinth", color = fg, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("QUEST MOD MANAGER", color = muted, fontSize = 9.sp, letterSpacing = 2.sp)
-                    }
-                }
-                when (page) {
-                    "Home" -> {
-                        Text("Welcome back.", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                        Text("Your Gorilla Tag mod workspace.", color = muted)
-                        Spacer(Modifier.height(20.dp))
-                        CardBlock(panel, selectedTheme.accent) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Filled.Wifi, null, tint = selectedTheme.accent)
-                                Spacer(Modifier.width(10.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text("Quest connection", color = fg, fontWeight = FontWeight.Bold)
-                                    Text("Not connected", color = muted, fontSize = 13.sp)
-                                }
-                                StatusPill("OFFLINE", selectedTheme.accent)
-                            }
-                            Spacer(Modifier.height(14.dp))
-                            Button(onClick = { page = "Settings" }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = selectedTheme.accent, contentColor = Color(0xFF171717))) { Text("Set up wireless debugging") }
-                        }
-                        Spacer(Modifier.height(14.dp))
-                        CardBlock(panel, selectedTheme.accent) {
-                            Text("Quick actions", color = fg, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                            Spacer(Modifier.height(12.dp))
-                            ActionRow("Patch OBB", "Create a backup and prepare the game files", Icons.Filled.Build, selectedTheme.accent) { page = "Patcher" }
-                            ActionRow("Choose a ZIP", archiveName ?: "Select one mod archive", Icons.Filled.FileOpen, selectedTheme.accent) { page = "Mods" }
-                            ActionRow("Launch Gorilla Tag", "Open the installed game", Icons.Filled.PlayArrow, selectedTheme.accent) { launchGorillaTag(context) }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text("ZIP import is available. Game launch opens the installed Gorilla Tag app; mod installation and patching are not active yet.", color = muted, fontSize = 11.sp)
-                    }
-                    "Mods" -> {
-                        Text("Mods", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                        Text("Manage your GorillaRinth mod library.", color = muted)
-                        Spacer(Modifier.height(12.dp))
-                        var modTab by remember { mutableStateOf("Store") }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(selected = modTab == "Store", onClick = { modTab = "Store" }, label = { Text("Store") })
-                            FilterChip(selected = modTab == "Library", onClick = { modTab = "Library" }, label = { Text("Library") })
-                        }
-                        if (modTab == "Store") {
-                            CardBlock(panel, selectedTheme.accent) {
-                                Text("GorillaRinth Store", color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                Text("Official community mod catalog", color = muted, fontSize = 12.sp)
-                                Spacer(Modifier.height(18.dp))
-                                Box(Modifier.fillMaxWidth().height(130.dp), contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(Icons.Filled.CloudOff, null, tint = muted, modifier = Modifier.size(34.dp))
-                                        Spacer(Modifier.height(8.dp))
-                                        Text("Store is coming soon", color = fg, fontWeight = FontWeight.Bold)
-                                        Text("Server catalog will be connected later.", color = muted, fontSize = 12.sp)
-                                    }
-                                }
-                            }
-                        } else {
-                            CardBlock(panel, selectedTheme.accent) {
-                                Icon(Icons.Filled.Extension, tint = selectedTheme.accent, contentDescription = null, modifier = Modifier.size(30.dp))
-                                Spacer(Modifier.height(8.dp))
-                                Text("Import a Quest mod", color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                Text("Select a .qmod package or ZIP containing mod.json and mod files.", color = muted, fontSize = 12.sp)
-                                Spacer(Modifier.height(10.dp))
-                                Button(onClick = { picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) { Text("Browse .qmod / .zip") }
-                                archiveName?.let { Text("Selected: $it", color = selectedTheme.accent, modifier = Modifier.padding(top = 8.dp)) }
-                                Button(onClick = {
-                                    val uri = archiveUri ?: return@Button
-                                    importing = true
-                                    importStatus = "Inspecting archive…"
-                                    scope.launch {
-                                        val result = withContext(Dispatchers.IO) { extractModArchive(context, uri) }
-                                        questModManifest = if (result.startsWith("Imported successfully")) withContext(Dispatchers.IO) { readQuestModManifest(context) } else null
-                                        importStatus = if (result.startsWith("Imported successfully") && questModManifest == null) "$result No valid mod.json manifest was found." else result
-                                        importing = false
-                                    }
-                                }, enabled = archiveUri != null && !importing, modifier = Modifier.fillMaxWidth()) { Text(if (importing) "Importing…" else "Inspect & extract ZIP") }
-                                Text(importStatus, color = muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-                                questModManifest?.let { manifest ->
-                                    Spacer(Modifier.height(12.dp))
-                                    HorizontalDivider()
-                                    Text("Quest mod manifest detected", color = selectedTheme.accent, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
-                                    Text(manifest.name, color = fg, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                                    Text("ID: ${manifest.id}  •  Version: ${manifest.version}", color = muted, fontSize = 12.sp)
-                                    Text("Author: ${manifest.author}", color = muted, fontSize = 12.sp)
-                                    Text("Manifest: ${manifest.manifestVersion}  •  Dependencies: ${manifest.dependencies.joinToString().ifBlank { "None" }}", color = muted, fontSize = 11.sp)
-                                    Text("Mod files: ${manifest.modFiles.joinToString().ifBlank { "None listed" }}", color = muted, fontSize = 11.sp)
-                                    Text("Library files: ${manifest.libraryFiles.joinToString().ifBlank { "None listed" }}", color = muted, fontSize = 11.sp)
-                                    Text(if (manifest.missingFiles.isEmpty()) "All listed files were found." else "Missing files: ${manifest.missingFiles.joinToString()}", color = if (manifest.missingFiles.isEmpty()) selectedTheme.accent else Color(0xFFFF6B6B), fontSize = 11.sp)
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(8.dp))
-                        Text("The store will connect to the GorillaRinth server when its API is ready. Local archive inspection is available in Library.", color = muted, fontSize = 11.sp)
-                    }
-                    "Patcher" -> {
-                        Text("OBB patcher", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                        Text("Backup first. Never overwrite the original.", color = muted)
-                        Spacer(Modifier.height(18.dp))
-                        CardBlock(panel, selectedTheme.accent) {
-                            Text("Patch status", color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Spacer(Modifier.height(10.dp))
-                            LinearProgressIndicator(progress = { 0f }, modifier = Modifier.fillMaxWidth(), color = selectedTheme.accent, trackColor = muted.copy(alpha = .2f))
-                            Text("Waiting for Quest connection", color = muted, fontSize = 12.sp, modifier = Modifier.padding(top = 9.dp))
-                            Spacer(Modifier.height(16.dp))
-                            Button(onClick = { }, enabled = false, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = selectedTheme.accent, disabledContainerColor = muted.copy(alpha = .2f))) { Text("Patch OBB (not configured)") }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text("OBB patching is intentionally disabled until the exact Driftrinth patch procedure and a compatible, authorized mod-loader format are verified.", color = muted, fontSize = 12.sp)
-                    }
-                    "Themes" -> {
-                        Text("Appearance", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                        Text("Choose your GorillaRinth accent and mode.", color = muted)
-                        Spacer(Modifier.height(18.dp))
-                        themes.forEach { theme ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { selectedTheme = theme },
-                                colors = CardDefaults.cardColors(containerColor = panel),
-                                shape = RoundedCornerShape(16.dp)
-                            ) {
-                                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Box(Modifier.size(28.dp).background(theme.accent, RoundedCornerShape(9.dp)))
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(theme.name, color = fg, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                                    if (selectedTheme.name == theme.name) Icon(Icons.Filled.CheckCircle, null, tint = selectedTheme.accent)
-                                }
-                            }
-                        }
-                    }
-                    else -> {
-                        Text("Settings", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                        Text("Quest connection setup", color = muted)
-                        Spacer(Modifier.height(18.dp))
-                        CardBlock(panel, selectedTheme.accent) {
-                            Text("Wireless debugging", color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Text("Pairing-code connection is planned. Enable Developer Mode and Wireless Debugging on your Quest, then enter the pairing details here once the ADB pairing component is added.", color = muted, fontSize = 13.sp)
-                            Spacer(Modifier.height(12.dp))
-                            OutlinedTextField(value = pairingCode, onValueChange = { pairingCode = it }, label = { Text("Pairing code (UI preview)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            Spacer(Modifier.height(8.dp))
-                            Text("Connection is not active in this prototype.", color = muted, fontSize = 11.sp)
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        CardBlock(panel, selectedTheme.accent) {
-                            Text("About GorillaRinth", color = fg, fontWeight = FontWeight.Bold)
-                            Text("Version 0.1.0 • Gorilla Tag Quest mod manager", color = muted, fontSize = 13.sp)
-                            Spacer(Modifier.height(14.dp))
-                            HorizontalDivider()
-                            Text("Credits", color = fg, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
-                            Text("UI inspiration: Driftrinth. Credits to its contributors, including Stripes and MeiMei.", color = muted, fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
+            } ?: error("Could not read selected archive.")
+            if (root.exists()) root.deleteRecursively()
+            if (!temp.renameTo(root)) error("Could not save imported archive.")
+            val modJson = root.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) }
+                ?: error("Archive extracted, but no mod.json manifest was found.")
+            importedManifest = JSONObject(modJson.readText())
+            true to importedManifest?.optString("name", "Imported mod").orEmpty()
+        } catch (e: Exception) {
+            temp.deleteRecursively()
+            false to (e.message ?: "Import failed.")
         }
     }
-}
 
-@Composable
-private fun CardBlock(panel: Color, accent: Color, content: @Composable ColumnScope.() -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = panel), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(18.dp), content = content)
+    private fun readManifest(): JSONObject? {
+        val root = File(filesDir, "imported_mod")
+        val file = root.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) } ?: return null
+        return runCatching { JSONObject(file.readText()) }.getOrNull()
     }
-}
-
-@Composable
-private fun StatusPill(label: String, accent: Color) {
-    Surface(color = accent.copy(alpha = .16f), shape = RoundedCornerShape(50)) {
-        Text(label, color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
-    }
-}
-
-@Composable
-private fun ActionRow(title: String, subtitle: String, icon: ImageVector, accent: Color, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = accent, modifier = Modifier.size(23.dp))
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, color = MaterialTheme.colorScheme.onSurface.copy(alpha = .62f), fontSize = 11.sp)
-        }
-        Icon(Icons.Filled.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .45f))
-    }
-}
-
-private suspend fun extractModArchive(context: android.content.Context, uri: Uri): String {
-    val root = File(context.filesDir, "imported_mod")
-    val temp = File(context.filesDir, "imported_mod_tmp")
-    return try {
-        if (temp.exists()) temp.deleteRecursively()
-        if (!temp.mkdirs()) return "Could not create the temporary import folder."
-        var entries = 0
-        var totalBytes = 0L
-        var files = 0
-        val canonicalRoot = temp.canonicalPath + File.separator
-        val input = context.contentResolver.openInputStream(uri)
-            ?: return "Could not open the selected ZIP archive."
-        input.use { raw ->
-            ZipInputStream(raw).use { zip ->
-                while (true) {
-                    val entry = zip.nextEntry ?: break
-                    entries++
-                    if (entries > 500) throw IllegalArgumentException("Archive contains too many entries (limit: 500).")
-                    val output = File(temp, entry.name)
-                    val canonicalOutput = output.canonicalPath
-                    if (!canonicalOutput.startsWith(canonicalRoot) && canonicalOutput != temp.canonicalPath) {
-                        throw IllegalArgumentException("Unsafe ZIP path detected: ${entry.name}")
-                    }
-                    if (entry.isDirectory) {
-                        if (!output.exists() && !output.mkdirs()) throw IllegalStateException("Could not create an archive folder.")
-                    } else {
-                        output.parentFile?.let { if (!it.exists() && !it.mkdirs()) throw IllegalStateException("Could not create an archive folder.") }
-                        FileOutputStream(output).use { sink ->
-                            val buffer = ByteArray(8192)
-                            while (true) {
-                                val count = zip.read(buffer)
-                                if (count < 0) break
-                                totalBytes += count
-                                if (totalBytes > 256L * 1024L * 1024L) {
-                                    throw IllegalArgumentException("Extracted data exceeds the 256 MB safety limit.")
-                                }
-                                sink.write(buffer, 0, count)
-                            }
-                        }
-                        files++
-                    }
-                    zip.closeEntry()
-                }
-            }
-        }
-        if (files == 0) throw IllegalArgumentException("The ZIP archive contains no files.")
-        if (root.exists() && !root.deleteRecursively()) throw IllegalStateException("Could not replace the previous imported archive.")
-        if (!temp.renameTo(root)) throw IllegalStateException("Could not finalize the extracted archive.")
-        "Imported successfully: $files files extracted (${totalBytes / 1024} KB). Stored privately in GorillaRinth."
-    } catch (e: Exception) {
-        temp.deleteRecursively()
-        "Import failed: ${e.message ?: "Unknown ZIP error"}"
-    }
-}
-
- 
-private fun launchGorillaTag(context: android.content.Context) {
-    val packageName = "com.AnotherAxiom.GorillaTag"
-    val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-    if (intent == null) {
-        Toast.makeText(context, "Gorilla Tag is not installed or cannot be launched.", Toast.LENGTH_LONG).show()
-        return
-    }
-    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { context.startActivity(intent) }
-        .onFailure { Toast.makeText(context, "Could not launch Gorilla Tag: ${it.message}", Toast.LENGTH_LONG).show() }
-}
-
-private data class QuestModManifest(val manifestVersion: String, val name: String, val id: String, val author: String, val version: String, val dependencies: List<String>, val modFiles: List<String>, val libraryFiles: List<String>, val missingFiles: List<String>)
-
-private fun readQuestModManifest(context: android.content.Context): QuestModManifest? {
-    val root = File(context.filesDir, "imported_mod")
-    val manifestFile = root.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) } ?: return null
-    return runCatching {
-        val json = JSONObject(manifestFile.readText())
-        fun stringList(key: String): List<String> {
-            val array = json.optJSONArray(key) ?: return emptyList()
-            return (0 until array.length()).mapNotNull { i -> array.optString(i).takeIf { it.isNotBlank() } }
-        }
-        val modFiles = stringList("modFiles")
-        val libraryFiles = stringList("libraryFiles")
-        val manifestDir = manifestFile.parentFile ?: root
-        val missing = (modFiles + libraryFiles).filter { listed ->
-            val candidate = File(manifestDir, listed)
-            val safeRoot = manifestDir.canonicalPath + File.separator
-            !candidate.canonicalPath.startsWith(safeRoot) || !candidate.isFile
-        }
-        QuestModManifest(json.optString("_version", "Unknown"), json.optString("name", "Unnamed mod"), json.optString("id", ""), json.optString("author", "Unknown"), json.optString("version", "Unknown"), stringList("dependsOn"), modFiles, libraryFiles, missing)
-    }.getOrNull()
 }
