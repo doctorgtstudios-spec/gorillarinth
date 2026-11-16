@@ -332,16 +332,46 @@ class MainActivity : ComponentActivity() {
     private fun installNativeLibraries(client: Kadb, manifest: JSONObject): JSONObject {
         val gamePackage = "com.AnotherAxiom.GorillaTag"
         val importedRoot = File(filesDir, "imported_mod")
-        val libraries = importedRoot.walkTopDown().filter {
-            it.isFile && it.extension.equals("so", ignoreCase = true)
-        }.toList()
-        check(libraries.isNotEmpty()) { "No .so files were found in the imported mod." }
+        val manifestFile = findManifestFile() ?: error("The imported mod manifest is missing.")
+        val root = manifestFile.parentFile ?: importedRoot
 
-        libraries.forEach { library ->
-            val info = inspectNativeLibrary(library)
-            check(info.optBoolean("isElf", false)) {
-                "${library.name} is not a valid ELF shared library."
+        fun declaredFiles(key: String): List<File> {
+            val values = manifest.optJSONArray(key) ?: JSONArray()
+            val result = mutableListOf<File>()
+            for (i in 0 until values.length()) {
+                val relative = values.optString(i).replace('\\', '/').trimStart('/')
+                if (relative.isBlank()) continue
+                val file = File(root, relative)
+                check(file.canonicalPath.startsWith(root.canonicalPath + File.separator)) {
+                    "QMOD $key contains an unsafe path: $relative"
+                }
+                check(file.isFile) { "QMOD $key file is missing: $relative" }
+                result += file
             }
+            return result
+        }
+
+        var mods = declaredFiles("modFiles").filter { it.extension.equals("so", true) }
+        var libraries = declaredFiles("libraryFiles").filter { it.extension.equals("so", true) }
+        if (mods.isEmpty() && libraries.isEmpty()) {
+            // Compatibility with older non-standard QMODs that only contain .so payloads.
+            val all = importedRoot.walkTopDown().filter {
+                it.isFile && it.extension.equals("so", true)
+            }.toList()
+            mods = all
+        }
+        check(mods.isNotEmpty() || libraries.isNotEmpty()) {
+            "No native .so files were declared in this QMOD's modFiles or libraryFiles."
+        }
+        check(mods.map { it.name }.distinct().size == mods.size &&
+            libraries.map { it.name }.distinct().size == libraries.size &&
+            mods.map { it.name }.intersect(libraries.map { it.name }.toSet()).isEmpty()) {
+            "This QMOD contains duplicate native library filenames; rename the conflicting files before installing."
+        }
+
+        (mods + libraries).forEach { library ->
+            val info = inspectNativeLibrary(library)
+            check(info.optBoolean("isElf", false)) { "${library.name} is not a valid ELF shared library." }
             check(info.optBoolean("deviceAbiSupported", false)) {
                 "${library.name} targets ${info.optString("abi")}, not this headset's ABI (${android.os.Build.SUPPORTED_ABIS.joinToString()})."
             }
@@ -354,28 +384,54 @@ class MainActivity : ComponentActivity() {
             ?: error("Could not locate Gorilla Tag's native library directory.")
         val loaderCheck = client.shell("test -f '$nativeDir/libmodloader.so' && echo installed").allOutput
         check(loaderCheck.contains("installed")) {
-            "Gorilla Tag does not have QuestLoader installed yet. A native loader must be patched into the game's APK before .so mods can run. GorillaRinth has not patched the APK, so no library was copied."
+            "Gorilla Tag does not have QuestLoader installed yet. Patch and install the QuestLoader APK first."
+        }
+
+        val prefs = getSharedPreferences("mods", MODE_PRIVATE)
+        val previousMods = JSONArray(prefs.getString("nativeModNames", "[]") ?: "[]")
+        val previousLibraries = JSONArray(prefs.getString("nativeLibraryNames", "[]") ?: "[]")
+        val modsDir = "/sdcard/Android/data/$gamePackage/files/mods"
+        val libsDir = "/sdcard/Android/data/$gamePackage/files/libs"
+        shellChecked(client, "am force-stop $gamePackage")
+        shellChecked(client, "mkdir -p '$modsDir' '$libsDir' && chmod 755 '$modsDir' '$libsDir'")
+
+        fun removePrevious(directory: String, names: JSONArray) {
+            for (i in 0 until names.length()) {
+                val name = names.optString(i)
+                if (name.matches(Regex("[A-Za-z0-9_.-]+"))) {
+                    shellChecked(client, "rm -f '$directory/$name'")
+                }
+            }
+        }
+        removePrevious(modsDir, previousMods)
+        removePrevious(libsDir, previousLibraries)
+
+        mods.forEach { file ->
+            client.push(file, "$modsDir/${file.name}")
+            shellChecked(client, "chmod 644 '$modsDir/${file.name}'")
+        }
+        libraries.forEach { file ->
+            client.push(file, "$libsDir/${file.name}")
+            shellChecked(client, "chmod 644 '$libsDir/${file.name}'")
         }
 
         val modId = manifest.optString("id", "native-mod")
-        val remoteDir = "/sdcard/Android/data/$gamePackage/files/libs"
-        shellChecked(client, "am force-stop $gamePackage")
-        shellChecked(client, "mkdir -p '$remoteDir' && chmod 755 '$remoteDir'")
-        libraries.forEach { library ->
-            client.push(library, "$remoteDir/${library.name}")
-            shellChecked(client, "chmod 644 '$remoteDir/${library.name}'")
-        }
-        getSharedPreferences("mods", MODE_PRIVATE).edit()
+        prefs.edit()
             .putBoolean(modId, true)
-            .putString("nativeLibDir", remoteDir)
-            .putString("nativeLibNames", JSONArray(libraries.map { it.name }).toString())
+            .putString("nativeModDir", modsDir)
+            .putString("nativeModNames", JSONArray(mods.map { it.name }).toString())
+            .putString("nativeLibraryDir", libsDir)
+            .putString("nativeLibraryNames", JSONArray(libraries.map { it.name }).toString())
             .apply()
         return JSONObject()
-            .put("mods", libraries.size)
+            .put("mods", mods.size)
+            .put("nativeMods", JSONArray(mods.map { it.name }))
+            .put("libraries", libraries.size)
             .put("nativeLibraries", JSONArray(libraries.map { it.name }))
             .put("loadedOnNextLaunch", true)
             .put("loader", "QuestLoader")
-            .put("destination", remoteDir)
+            .put("modsDestination", modsDir)
+            .put("librariesDestination", libsDir)
     }
 
     private fun restoreOriginalObb(): String {
