@@ -23,7 +23,7 @@ For a matched build, tap **Download exact required build**. Use **Sign in to Met
 
 You can also use **Import downloaded Gorilla Tag APK** to stage an APK you downloaded separately, then tap **Install downloaded APK**. Both paths use Android's package installer and do not bypass its confirmation or package-signature checks.
 
-**Important limitation:** this implements authenticated APK download and user-confirmed installation, not QuestLoader APK patching. Native `.so` mods still cannot load until a compatible Quest modloader is injected into the game APK. GorillaRinth does not claim that the APK patcher is implemented. The existing OBB backup/patch/restore workflow remains separate and unchanged.
+**QuestLoader APK patching:** GorillaRinth now has an on-device patcher for the legacy QuestLoader v1.3.0 loader pair. It downloads and architecture-checks the official `libmain`/`libmodloader` binaries, rewrites the APK manifest and native libraries, signs the result with an app-local Android Keystore key, verifies the signature, and stages the patched APK. You must uninstall the official Gorilla Tag app before installing the differently signed patched build; Android will ask you to confirm both operations. Back up game data/OBB before uninstalling. This is specifically the legacy QuestLoader loader, not Scotland2, and has not yet been runtime-tested on a physical Quest. The existing OBB backup/patch/restore workflow remains separate and unchanged.
 
 ## Wireless ADB setup
 1. Put GorillaRinth and the Quest on the same Wi-Fi network.
