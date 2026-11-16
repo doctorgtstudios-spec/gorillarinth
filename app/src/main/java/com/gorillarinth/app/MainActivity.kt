@@ -17,6 +17,9 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
+import java.util.zip.ZipEntry
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -141,6 +144,98 @@ class MainActivity : ComponentActivity() {
         return runCatching { connectTo(host, port); true }.getOrDefault(false)
     }
 
+
+    private fun requireAdb(): Kadb {
+        adbClient?.takeIf { it.connectionCheck() }?.let { return it }
+        check(reconnectWireless()) { "Quest is not connected. Pair Wireless debugging first." }
+        return adbClient ?: error("ADB connection was lost.")
+    }
+
+    private fun shellChecked(client: Kadb, command: String): String {
+        val result = client.shell(command)
+        check(result.exitCode == 0) { result.allOutput.ifBlank { "Quest command failed." } }
+        return result.allOutput
+    }
+
+    private fun pullOriginalObb(): String {
+        val client = requireAdb()
+        val dir = "/sdcard/Android/obb/com.AnotherAxiom.GorillaTag"
+        val listing = client.shell("ls -1 $dir/*.obb 2>/dev/null").allOutput
+        val remote = listing.lineSequence().map { it.trim() }
+            .firstOrNull { it.endsWith(".obb") && !it.endsWith(".gorillarinth.bak") }
+            ?: error("No Gorilla Tag OBB found. Install or launch Gorilla Tag once, then retry.")
+        val original = File(filesDir, "base_original.obb")
+        val remoteBackup = "$remote.gorillarinth.bak"
+        val backupCheck = client.shell("if [ -f '$remoteBackup' ]; then echo exists; else echo missing; fi").allOutput.trim()
+        if (backupCheck != "exists") shellChecked(client, "cp '$remote' '$remoteBackup'")
+        client.pull(original, remote)
+        check(original.length() > 0L) { "The downloaded OBB is empty." }
+        getSharedPreferences("device", MODE_PRIVATE).edit().putString("obbPath", remote).apply()
+        return remote
+    }
+
+    private fun patchObb(): JSONObject {
+        val client = requireAdb()
+        val original = File(filesDir, "base_original.obb")
+        if (!original.exists()) pullOriginalObb()
+        val manifest = readManifest() ?: error("Import a mod ZIP containing mod.json first.")
+        val modId = manifest.optString("id", manifest.optString("name", "local-mod"))
+        check(getSharedPreferences("mods", MODE_PRIVATE).getBoolean(modId, false)) { "Turn the imported mod on before applying it." }
+        val overlayRoot = File(filesDir, "imported_mod/obb")
+        check(overlayRoot.isDirectory) { "This mod has no obb/ folder. Put files to add or replace inside obb/ in the mod ZIP." }
+        val overlays = overlayRoot.walkTopDown().filter { it.isFile }.associateBy {
+            it.relativeTo(overlayRoot).invariantSeparatorsPath
+        }
+        check(overlays.isNotEmpty()) { "The mod's obb/ folder is empty." }
+        val patched = File(filesDir, "base_patched.obb")
+        val names = overlays.keys
+        ZipFile(original).use { source ->
+            ZipOutputStream(patched.outputStream().buffered()).use { target ->
+                val entries = source.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    if (entry.name in names) continue
+                    target.putNextEntry(ZipEntry(entry.name))
+                    source.getInputStream(entry).use { it.copyTo(target) }
+                    target.closeEntry()
+                }
+                overlays.forEach { (name, file) ->
+                    require(!name.startsWith("/") && name.split('/').none { it == ".." || it.isBlank() }) {
+                        "Unsafe OBB patch path: $name"
+                    }
+                    target.putNextEntry(ZipEntry(name))
+                    file.inputStream().buffered().use { it.copyTo(target) }
+                    target.closeEntry()
+                }
+            }
+        }
+        check(patched.length() > 0L) { "Patched OBB output is empty." }
+        val remote = getSharedPreferences("device", MODE_PRIVATE).getString("obbPath", null)
+            ?: error("Pull the original game OBB before applying mods.")
+        val tempRemote = "$remote.gorillarinth.tmp"
+        client.push(patched, tempRemote)
+        shellChecked(client, "mv '$tempRemote' '$remote'")
+        return JSONObject().put("mods", 1).put("removed", JSONArray())
+            .put("bytes", patched.length()).put("backup", "$remote.gorillarinth.bak")
+    }
+
+    private fun restoreOriginalObb(): String {
+        val client = requireAdb()
+        val remote = getSharedPreferences("device", MODE_PRIVATE).getString("obbPath", null)
+            ?: error("No saved Gorilla Tag OBB path. Connect and use Copy from Quest first.")
+        val backup = "$remote.gorillarinth.bak"
+        val exists = client.shell("if [ -f '$backup' ]; then echo yes; else echo no; fi").allOutput.trim()
+        if (exists == "yes") shellChecked(client, "cp '$backup' '$remote'")
+        else {
+            val local = File(filesDir, "base_original.obb")
+            check(local.exists()) { "No original OBB backup was found." }
+            val tempRemote = "$remote.gorillarinth.restore"
+            client.push(local, tempRemote)
+            shellChecked(client, "mv '$tempRemote' '$remote'")
+        }
+        return "Original Gorilla Tag OBB restored. Backup kept at $backup."
+    }
+
     private fun state(): JSONObject {
         val library = JSONArray()
         val manifest = readManifest()
@@ -167,17 +262,23 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences("device", MODE_PRIVATE)
         val paired = prefs.getString("host", null) != null
         val connected = adbClient?.connectionCheck() == true
+        val baseFile = File(filesDir, "base_original.obb")
+        val baseUsable = baseFile.exists() && baseFile.length() > 0L
+        val enabledMod = manifest?.let {
+            getSharedPreferences("mods", MODE_PRIVATE).getBoolean(it.optString("id", it.optString("name", "local-mod")), false)
+        } ?: false
         return JSONObject()
             .put("library", library)
             .put("device", JSONObject().put("state", if (connected) "connected" else if (paired) "paired" else "none")
                 .put("paired", paired).put("autoReconnect", prefs.getBoolean("autoReconnect", false)).put("model", "Quest"))
             .put("game", game)
-            .put("base", JSONObject().put("usable", false).put("fromModded", false).put("name", ""))
+            .put("base", JSONObject().put("usable", baseUsable).put("fromModded", File(filesDir, "base_patched.obb").exists())
+                .put("name", if (baseUsable) "Original Gorilla Tag OBB" else ""))
             .put("checks", JSONArray())
             .put("busy", JSONObject.NULL)
             .put("appliedAt", JSONObject.NULL)
             .put("capacity", 0).put("used", 0)
-            .put("pending", false).put("canApply", false)
+            .put("pending", false).put("canApply", connected && baseUsable && enabledMod)
             .put("version", "0.1.0")
     }
 
@@ -217,6 +318,14 @@ class MainActivity : ComponentActivity() {
                         pairWireless(args.optInt(0), args.optString(1), args.optInt(2)).also { }
                     }
                     "reconnect" -> onIo(id) { reconnectWireless().toString() }
+                    "pullBase" -> onIo(id) { pullOriginalObb(); JSONObject().put("saved", true).toString() }
+                    "apply" -> onIo(id) { patchObb().toString() }
+                    "restoreBase" -> onIo(id) { JSONObject().put("message", restoreOriginalObb()).toString() }
+                    "stopGame" -> onIo(id) {
+                        val client = requireAdb()
+                        shellChecked(client, "am force-stop com.AnotherAxiom.GorillaTag")
+                        "true"
+                    }
                     "toggle" -> {
                         val modId = args.optString(0)
                         val prefs = getSharedPreferences("mods", MODE_PRIVATE)
@@ -242,9 +351,8 @@ class MainActivity : ComponentActivity() {
                         complete(id, true, enabled.toString())
                     }
                     "storeConfig" -> complete(id, true, JSONObject().put("url", "").put("configured", false).toString())
-                    "pullBase", "chooseBase", "restoreBase", "stopGame", "apply", "storeSetUrl", "storeInstall" ->
+                    "chooseBase", "storeSetUrl", "storeInstall" ->
                         throw UnsupportedOperationException(when (method) {
-                            "apply" -> "OBB patching needs a supported mod patch layout; no patch format is defined in the imported mod manifest yet."
                             "storeSetUrl", "storeInstall" -> "The GorillaRinth server catalog is not connected yet."
                             else -> "This game-management action is not implemented yet."
                         })
