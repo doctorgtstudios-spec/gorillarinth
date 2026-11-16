@@ -172,6 +172,7 @@ function gameBuildActions() {
   return `<div class="row wrap" style="margin-top:10px">
     ${plan.status === 'download' ? `<button class="btn primary" data-download-game-build="1">${ic('download')}Download exact required build</button>` : ''}
     ${S && S.stagedApk ? '<button class="btn line" data-install-apk="1">Install downloaded APK</button>' : ''}
+    <button class="btn line" data-meta-login="1">Sign in to Meta / get download token</button>
     <button class="btn line" data-import-apk="1">Import downloaded Gorilla Tag APK</button>
   </div>`;
 }
@@ -751,9 +752,10 @@ document.addEventListener('click', async (e) => {
     else if (d.setmode) { window.appearance.setMode(d.setmode); renderSettings(); }
     else if (d.settheme) { window.appearance.setTheme(d.settheme); aura.paint(); renderSettings(); }
     else if (d.upload) await upload();
+    else if (d.metaLogin) { await api.openMetaLogin(); }
     else if (d.downloadGameBuild) {
       const result = JSON.parse(await api.downloadMatchedApk());
-      toast('Downloaded and verified Gorilla Tag ' + result.versionName + '. Android installer is opening for confirmation.');
+      toast('Downloaded and verified Gorilla Tag ' + result.versionName + '. ' + (result.installerMessage || 'Android installer opened.'));
       await refresh(true);
     }
     else if (d.installApk) {
