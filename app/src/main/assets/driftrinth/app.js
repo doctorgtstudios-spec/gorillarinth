@@ -482,7 +482,7 @@ const CREDITS = [
   ['Stripes', 'GorillaRinth developer and original UI contributor'],
   ['MeiMei', 'GorillaRinth contributor and mod creator'],
   ['Claude', 'AI Coding Assistant'],
-  ['GorillaRinth', 'Original renderer, layout and UI source'],
+  ['Driftrinth', 'Original renderer, layout and UI source'],
 ];
 // The slider's markup never changes, so background refreshes can't replace it while it is being dragged.
 function syncSpeedSlider() {
