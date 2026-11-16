@@ -218,14 +218,14 @@ class MainActivity : ComponentActivity() {
 
     private fun patchObb(): JSONObject {
         val client = requireAdb()
+        val manifest = readManifest()
+        if (manifest?.optString("format") == "native-library") {
+            return installNativeLibraries(client, manifest)
+        }
         val original = File(filesDir, "base_original.obb")
         if (!original.exists()) pullOriginalObb()
         val remote = getSharedPreferences("device", MODE_PRIVATE).getString("obbPath", null)
             ?: error("Pull the original game OBB before applying mods.")
-        val manifest = readManifest()
-        if (manifest?.optString("format") == "native-library") {
-            error("Native .so libraries were detected and imported, but GorillaRinth does not yet have a Quest native mod loader to load them.")
-        }
         val modId = manifest?.optString("id", manifest.optString("name", "local-mod"))
         val enabled = modId != null && getSharedPreferences("mods", MODE_PRIVATE).getBoolean(modId, false)
         shellChecked(client, "am force-stop com.AnotherAxiom.GorillaTag")
@@ -279,6 +279,55 @@ class MainActivity : ComponentActivity() {
             .putString("appliedModId", modId).putLong("appliedAt", System.currentTimeMillis()).apply()
         return JSONObject().put("mods", 1).put("removed", JSONArray())
             .put("bytes", patched.length()).put("backup", "$remote.gorillarinth.bak")
+    }
+
+    private fun installNativeLibraries(client: Kadb, manifest: JSONObject): JSONObject {
+        val gamePackage = "com.AnotherAxiom.GorillaTag"
+        val importedRoot = File(filesDir, "imported_mod")
+        val libraries = importedRoot.walkTopDown().filter {
+            it.isFile && it.extension.equals("so", ignoreCase = true)
+        }.toList()
+        check(libraries.isNotEmpty()) { "No .so files were found in the imported mod." }
+
+        libraries.forEach { library ->
+            val info = inspectNativeLibrary(library)
+            check(info.optBoolean("isElf", false)) {
+                "${library.name} is not a valid ELF shared library."
+            }
+            check(info.optBoolean("deviceAbiSupported", false)) {
+                "${library.name} targets ${info.optString("abi")}, not this headset's ABI (${android.os.Build.SUPPORTED_ABIS.joinToString()})."
+            }
+        }
+
+        // QuestLoader's native modloader must be injected into the game's APK first.
+        val packageInfo = shellChecked(client, "dumpsys package $gamePackage")
+        val nativeDir = Regex("nativeLibraryDir=([^\\s]+)")
+            .find(packageInfo)?.groupValues?.getOrNull(1)
+            ?: error("Could not locate Gorilla Tag's native library directory.")
+        val loaderCheck = client.shell("test -f '$nativeDir/libmodloader.so' && echo installed").allOutput
+        check(loaderCheck.contains("installed")) {
+            "Gorilla Tag does not have QuestLoader installed yet. A native loader must be patched into the game's APK before .so mods can run. GorillaRinth has not patched the APK, so no library was copied."
+        }
+
+        val modId = manifest.optString("id", "native-mod")
+        val remoteDir = "/sdcard/Android/data/$gamePackage/files/libs"
+        shellChecked(client, "am force-stop $gamePackage")
+        shellChecked(client, "mkdir -p '$remoteDir' && chmod 755 '$remoteDir'")
+        libraries.forEach { library ->
+            client.push(library, "$remoteDir/${library.name}")
+            shellChecked(client, "chmod 644 '$remoteDir/${library.name}'")
+        }
+        getSharedPreferences("mods", MODE_PRIVATE).edit()
+            .putBoolean(modId, true)
+            .putString("nativeLibDir", remoteDir)
+            .putString("nativeLibNames", JSONArray(libraries.map { it.name }).toString())
+            .apply()
+        return JSONObject()
+            .put("mods", libraries.size)
+            .put("nativeLibraries", JSONArray(libraries.map { it.name }))
+            .put("loadedOnNextLaunch", true)
+            .put("loader", "QuestLoader")
+            .put("destination", remoteDir)
     }
 
     private fun restoreOriginalObb(): String {
