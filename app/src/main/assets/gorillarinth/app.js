@@ -512,7 +512,7 @@ function renderSettings() {
   } else if (settingsTab === 'store') {
     if (!el.querySelector('#cdn-url')) {
       el._h = null;
-      el.innerHTML = `<section><h3>Mod store</h3><p>The address of a folder or manifest.json that lists mods. Leave it empty to only use mods you upload.</p><label class="field" style="margin-top:12px">Store address<input type="text" id="cdn-url" placeholder="https://example.com/mods/" spellcheck="false" autocomplete="off"></label><p class="err" id="cdn-msg" hidden></p><div class="row"><button class="btn primary small" id="cdn-save">Save and load</button><button class="btn line small" id="cdn-default">Use default</button></div></section>`;
+      el.innerHTML = `<section><h3>Mod store</h3><p>GitHub QMOD provider. Default: visionnvoiod/Quest-Mods. Provider browsing and downloads are being connected.</p><label class="field" style="margin-top:12px">Store address<input type="text" id="cdn-url" placeholder="https://github.com/visionnvoiod/Quest-Mods" spellcheck="false" autocomplete="off"></label><p class="err" id="cdn-msg" hidden></p><div class="row"><button class="btn primary small" id="cdn-save">Save and load</button><button class="btn line small" id="cdn-default">Use default</button></div></section>`;
       api.storeConfig().then((c) => { if ($('cdn-url')) $('cdn-url').value = c.url; }).catch(fail);
     }
   } else if (settingsTab === 'game') {
