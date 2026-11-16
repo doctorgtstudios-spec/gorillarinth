@@ -362,7 +362,7 @@ class MainActivity : ComponentActivity() {
             }.toList()
             mods = all
         }
-        check(mods.isNotEmpty() || libraries.isNotEmpty()) {
+        check(!modEnabled || mods.isNotEmpty() || libraries.isNotEmpty()) {
             "No native .so files were declared in this QMOD's modFiles or libraryFiles."
         }
         check(mods.map { it.name }.distinct().size == mods.size &&
