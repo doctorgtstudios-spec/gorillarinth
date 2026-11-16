@@ -351,9 +351,11 @@ class MainActivity : ComponentActivity() {
             return result
         }
 
-        var mods = declaredFiles("modFiles").filter { it.extension.equals("so", true) }
-        var libraries = declaredFiles("libraryFiles").filter { it.extension.equals("so", true) }
-        if (mods.isEmpty() && libraries.isEmpty()) {
+        val modId = manifest.optString("id", "native-mod")
+        val modEnabled = getSharedPreferences("mods", MODE_PRIVATE).getBoolean(modId, false)
+        var mods = if (modEnabled) declaredFiles("modFiles").filter { it.extension.equals("so", true) } else emptyList()
+        var libraries = if (modEnabled) declaredFiles("libraryFiles").filter { it.extension.equals("so", true) } else emptyList()
+        if (modEnabled && mods.isEmpty() && libraries.isEmpty()) {
             // Compatibility with older non-standard QMODs that only contain .so payloads.
             val all = importedRoot.walkTopDown().filter {
                 it.isFile && it.extension.equals("so", true)
@@ -415,8 +417,7 @@ class MainActivity : ComponentActivity() {
             shellChecked(client, "chmod 644 '$libsDir/${file.name}'")
         }
 
-        val modId = manifest.optString("id", "native-mod")
-        val applied = prefs.getBoolean(modId, false)
+        val applied = modEnabled
         prefs.edit()
             .putString("nativeModDir", modsDir)
             .putString("nativeModNames", JSONArray(mods.map { it.name }).toString())
