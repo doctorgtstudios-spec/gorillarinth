@@ -868,9 +868,9 @@ class MainActivity : ComponentActivity() {
                     "storeConfig" -> {
                         val prefs = getSharedPreferences("mod_store", MODE_PRIVATE)
                         val fallback = "https://github.com/visionnvoiod/Quest-Mods"
-                        val url = prefs.getString("url", fallback) ?: fallback
+                        val url = prefs.getString("url", null)?.trim()?.takeIf { it.isNotBlank() } ?: fallback
                         complete(id, true, JSONObject().put("url", url).put("fallback", fallback)
-                            .put("configured", url.isNotBlank()).toString())
+                            .put("configured", true).toString())
                     }
                     "storeSetUrl" -> {
                         val url = args.optString(0).trim()
