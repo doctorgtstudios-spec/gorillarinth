@@ -13,6 +13,12 @@ An Android companion and mod-management prototype for Gorilla Tag on Quest.
 - Launches and force-stops Gorilla Tag over ADB.
 - GitHub Actions builds a debug APK automatically.
 
+## Meta sign-in for Gorilla Tag APK downloads
+
+The OculusDB version picker includes **Sign in with Meta**. It opens Meta's official Developer Dashboard in the device browser. Sign in there with the Meta account that owns Gorilla Tag, then return to GorillaRinth and choose **Open download** for the desired OculusDB version.
+
+Authentication is handled by Meta in the browser: GorillaRinth does not collect Meta passwords, read browser cookies, or claim an in-app Meta session. Meta may still restrict APK access based on account ownership and developer-dashboard permissions. OculusDB supplies version metadata; it does not grant download authorization.
+
 ## Wireless ADB setup
 1. Put GorillaRinth and the Quest on the same Wi-Fi network.
 2. Open Android Developer options, enable Wireless debugging, and choose **Pair device with pairing code**.
