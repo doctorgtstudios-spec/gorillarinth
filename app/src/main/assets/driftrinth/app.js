@@ -141,7 +141,7 @@ function setupCard() {
   const devText = dev ? 'Connected over wireless ADB.'
     : st === 'reconnecting' ? 'Reconnecting automatically…'
     : st === 'lost' ? 'Could not reconnect. Check that Wireless debugging is on.'
-    : 'One time only. Driftrinth reconnects on its own after this.';
+    : 'One time only. GorillaRinth reconnects on its own after this.';
   return `<div class="card setup">
     <div class="step ${dev ? 'done' : ''}"><span class="num">${dev ? ic('check') : st === 'reconnecting' ? '<span class="spin"></span>' : '1'}</span><div class="t"><b>Pair your headset</b><small>${devText}</small></div><div class="row">${a}</div></div>
     <div class="step ${S.base && S.base.usable ? 'done' : ''}"><span class="num">${S.base && S.base.usable ? ic('check') : '2'}</span><div class="t"><b>Save a clean copy of the game file</b><small>${S.base && S.base.usable ? esc(S.base.name) : pulling ? 'Copying. You can keep using the app.' : 'Mods are built from this copy, even if the game is already modded. It takes about 3 GB of space.'}</small>${pulling && task ? `<div class="bar"><i style="width:${Math.round(task.fraction * 100)}%"></i></div>` : ''}</div>${b}</div>
@@ -370,12 +370,12 @@ const wizOk = (t) => `<div class="wiz-ok">${ic('check')}<span>${t}</span></div>`
 const wizWait = (t) => `<div class="wiz-wait"><span class="spin"></span><span>${t}</span></div>`;
 function setupBody(i) {
   const d = S.device, st = d.state, g = S.game, b = S.base;
-  if (i === 0) return `<h2>Find Orion Drift</h2><p>Driftrinth manages mods for the copy of Orion Drift on this headset.</p>`
+  if (i === 0) return `<h2>Find Orion Drift</h2><p>GorillaRinth manages mods for the copy of Orion Drift on this headset.</p>`
     + (g ? wizOk(`Orion Drift ${esc(g.versionName)} is installed.`) : wizWait('Install Orion Drift from the Meta Horizon Store. This page updates when it is ready.'));
   if (i === 1) {
-    if (st === 'ready') return `<h2>Connect your headset</h2><p>Driftrinth uses wireless ADB on this headset to read and replace the game file.</p>${wizOk(`Connected to ${esc(d.model)}. It will reconnect by itself from now on.`)}`;
+    if (st === 'ready') return `<h2>Connect your headset</h2><p>GorillaRinth uses wireless ADB on this headset to read and replace the game file.</p>${wizOk(`Connected to ${esc(d.model)}. It will reconnect by itself from now on.`)}`;
     if (st === 'reconnecting') return `<h2>Connect your headset</h2><p>This headset is already paired, so there is nothing to type.</p>${wizWait('Reconnecting automatically…')}`;
-    if (st === 'lost') return `<h2>Connect your headset</h2><p>This headset is paired, but Driftrinth could not reach it. Check that Wireless debugging is on, then try again.</p><div class="row"><button class="btn primary" data-reconnect="1">Try again</button><button class="btn line" data-devset="1">Open Settings</button><button class="btn line" data-pair="1">Pair again</button></div>`;
+    if (st === 'lost') return `<h2>Connect your headset</h2><p>This headset is paired, but GorillaRinth could not reach it. Check that Wireless debugging is on, then try again.</p><div class="row"><button class="btn primary" data-reconnect="1">Try again</button><button class="btn line" data-devset="1">Open Settings</button><button class="btn line" data-pair="1">Pair again</button></div>`;
     return `<h2>Connect your headset</h2><p>You only do this once.</p><ol class="numbered">
       <li>Turn on <b>Developer Mode</b> for this headset in the Meta Horizon phone app.</li>
       <li>Open Settings, press <b>Open</b>, then go to <b>Developer options &gt; Wireless debugging</b> and turn it on.<br><button class="btn" data-devset="1">Open Settings</button></li>
@@ -384,7 +384,7 @@ function setupBody(i) {
   }
   if (i === 2) {
     const copying = S.busy === 'base';
-    const intro = '<h2>Save the game file</h2><p>Mods are built from a saved copy of the game file, which needs about 3 GB of free space. If the game is already modded, Driftrinth keeps those mods and adds them to your library.</p>';
+    const intro = '<h2>Save the game file</h2><p>Mods are built from a saved copy of the game file, which needs about 3 GB of free space. If the game is already modded, GorillaRinth keeps those mods and adds them to your library.</p>';
     if (b && b.usable) return intro + wizOk(`Saved ${esc(b.name)}.`);
     if (copying) return intro + wizWait('Copying the game file. This takes a minute or two.') + (task ? `<div class="bar wiz-bar"><i style="width:${Math.round(task.fraction * 100)}%"></i></div>` : '');
     return intro + `<div class="row">${connected() && g ? '<button class="btn primary" data-pull="1">Copy from this headset</button>' : '<button class="btn primary" disabled>Connect your headset first</button>'}<button class="btn line" data-choose="1">Choose a file</button></div>`;
@@ -479,11 +479,10 @@ function openDetail(src, id) {
 $('detail').addEventListener('close', () => { detailRef = null; });
 
 const CREDITS = [
-  ['Stripes', 'Developer Of Driftrinth'],
-  ['MeiMei', 'Made Most Mods On Driftrinth, And Some Of The Features Were Taken From Patchbay, A PC Mod Loader'],
+  ['Stripes', 'GorillaRinth developer and original UI contributor'],
+  ['MeiMei', 'GorillaRinth contributor and mod creator'],
   ['Claude', 'AI Coding Assistant'],
-  ['Modrinth', 'UI Inspiration'],
-  ['Another Axiom', 'Orion Drift Creators (they suck)'],
+  ['GorillaRinth', 'Original renderer, layout and UI source'],
 ];
 // The slider's markup never changes, so background refreshes can't replace it while it is being dragged.
 function syncSpeedSlider() {
@@ -500,7 +499,7 @@ function renderSettings() {
   }
   const d = S.device, el = $('settings-body');
   if (settingsTab === 'connection') {
-    setHtml(el, `<section><h3>Reconnect automatically</h3><div class="opt"><p>After pairing once, Driftrinth turns Wireless debugging back on when it is off and reconnects by itself, including after a restart. This gives the app permission to change that one Android setting.</p><button class="switch" role="switch" aria-checked="${d.autoReconnect}" data-autore="1" aria-label="Reconnect automatically"></button></div></section>
+    setHtml(el, `<section><h3>Reconnect automatically</h3><div class="opt"><p>After pairing once, GorillaRinth turns Wireless debugging back on when it is off and reconnects by itself, including after a restart. This gives the app permission to change that one Android setting.</p><button class="switch" role="switch" aria-checked="${d.autoReconnect}" data-autore="1" aria-label="Reconnect automatically"></button></div></section>
       <section><h3>Headset</h3><p>${d.state === 'ready' ? 'Connected to ' + esc(d.model) + '.' : 'Not connected right now.'}</p><div class="row">${d.state !== 'ready' ? '<button class="btn primary small" data-reconnect="1">Reconnect</button>' : ''}<button class="btn line small" data-pair="1">${d.paired ? 'Pair again' : 'Pair headset'}</button></div></section>`);
   } else if (settingsTab === 'store') {
     if (!el.querySelector('#cdn-url')) {
@@ -521,7 +520,7 @@ function renderSettings() {
   } else if (settingsTab === 'credits') {
     setHtml(el, `<section><h3>Credits</h3><div class="credits">${CREDITS.map(([n, r]) => `<div class="credit"><b>${esc(n)}</b><span>${esc(r)}</span></div>`).join('')}</div><p style="margin-top:14px">Font: Inter, under the SIL Open Font License.</p></section>`);
   } else {
-    setHtml(el, `<section><div class="about-mark">${MARK}Driftrinth</div><p>Version ${esc(S.version)}. A mod manager for Orion Drift that runs on the headset.</p><p>Not affiliated with Modrinth or Another Axiom.</p></section>`);
+    setHtml(el, `<section><div class="about-mark">${MARK}GorillaRinth</div><p>Version ${esc(S.version)}. A Gorilla Tag companion and mod manager.</p><p>UI source: GorillaRinth. Credits to its contributors.</p></section>`);
   }
 }
 
@@ -682,7 +681,7 @@ $('pair-go').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Pairing…'; msg.hidden = true;
   try {
     await api.pair(Number($('pair-port').value), $('pair-code').value, Number($('pair-connect').value) || 0);
-    $('pair').close(); toast('Paired. Driftrinth will reconnect by itself from now on.'); await refresh(true);
+    $('pair').close(); toast('Paired. GorillaRinth will reconnect by itself from now on.'); await refresh(true);
   } catch (err) { msg.textContent = clean(err); msg.hidden = false; }
   btn.disabled = false; btn.textContent = 'Pair';
 });
