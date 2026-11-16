@@ -215,10 +215,23 @@ class MainActivity : ComponentActivity() {
         val client = requireAdb()
         val original = File(filesDir, "base_original.obb")
         if (!original.exists()) pullOriginalObb()
-        val manifest = readManifest() ?: error("Import a mod ZIP containing mod.json first.")
-        val modId = manifest.optString("id", manifest.optString("name", "local-mod"))
-        check(getSharedPreferences("mods", MODE_PRIVATE).getBoolean(modId, false)) { "Turn the imported mod on before applying it." }
-        val overlayRoot = File(filesDir, "imported_mod/obb")
+        val remote = getSharedPreferences("device", MODE_PRIVATE).getString("obbPath", null)
+            ?: error("Pull the original game OBB before applying mods.")
+        val manifest = readManifest()
+        val modId = manifest?.optString("id", manifest.optString("name", "local-mod"))
+        val enabled = modId != null && getSharedPreferences("mods", MODE_PRIVATE).getBoolean(modId, false)
+        shellChecked(client, "am force-stop com.AnotherAxiom.GorillaTag")
+        if (!enabled) {
+            val tempRemote = "$remote.gorillarinth.tmp"
+            client.push(original, tempRemote)
+            shellChecked(client, "mv '$tempRemote' '$remote'")
+            File(filesDir, "base_patched.obb").delete()
+            getSharedPreferences("device", MODE_PRIVATE).edit().remove("appliedModId").remove("appliedAt").apply()
+            return JSONObject().put("mods", 0).put("removed", JSONArray()).put("bytes", original.length())
+                .put("backup", "$remote.gorillarinth.bak")
+        }
+        val manifestFile = findManifestFile() ?: error("The imported mod manifest is missing.")
+        val overlayRoot = File(manifestFile.parentFile, "obb")
         check(overlayRoot.isDirectory) { "This mod has no obb/ folder. Put files to add or replace inside obb/ in the mod ZIP." }
         val overlays = overlayRoot.walkTopDown().filter { it.isFile }.associateBy {
             it.relativeTo(overlayRoot).invariantSeparatorsPath
@@ -237,7 +250,8 @@ class MainActivity : ComponentActivity() {
                     target.closeEntry()
                 }
                 overlays.forEach { (name, file) ->
-                    require(!name.startsWith("/") && name.split('/').none { it == ".." || it.isBlank() }) {
+                    require(name.isNotBlank() && !name.startsWith("/") &&
+                        !name.contains('\\') && name.split('/').none { it == ".." || it.isBlank() }) {
                         "Unsafe OBB patch path: $name"
                     }
                     target.putNextEntry(ZipEntry(name))
@@ -250,12 +264,11 @@ class MainActivity : ComponentActivity() {
         ZipFile(patched).use { archive ->
             check(archive.entries().hasMoreElements()) { "Patched OBB has no archive entries." }
         }
-        shellChecked(client, "am force-stop com.AnotherAxiom.GorillaTag")
-        val remote = getSharedPreferences("device", MODE_PRIVATE).getString("obbPath", null)
-            ?: error("Pull the original game OBB before applying mods.")
         val tempRemote = "$remote.gorillarinth.tmp"
         client.push(patched, tempRemote)
         shellChecked(client, "mv '$tempRemote' '$remote'")
+        getSharedPreferences("device", MODE_PRIVATE).edit()
+            .putString("appliedModId", modId).putLong("appliedAt", System.currentTimeMillis()).apply()
         return JSONObject().put("mods", 1).put("removed", JSONArray())
             .put("bytes", patched.length()).put("backup", "$remote.gorillarinth.bak")
     }
@@ -275,6 +288,7 @@ class MainActivity : ComponentActivity() {
             shellChecked(client, "mv '$tempRemote' '$remote'")
         }
         File(filesDir, "base_patched.obb").delete()
+        getSharedPreferences("device", MODE_PRIVATE).edit().remove("appliedModId").remove("appliedAt").apply()
         return "Original Gorilla Tag OBB restored. Backup kept at $backup."
     }
 
