@@ -15,9 +15,9 @@ An Android companion and mod-management prototype for Gorilla Tag on Quest.
 
 ## Default QMOD provider
 
-The Mod store settings now default to the GitHub repository [visionnvoiod/Quest-Mods](https://github.com/visionnvoiod/Quest-Mods). The provider URL is saved in GorillaRinth's Android app preferences and can be changed to another HTTPS provider.
+The Mod store defaults to [visionnvoiod/Quest-Mods](https://github.com/visionnvoiod/Quest-Mods). GorillaRinth reads the repository's default branch tree through the GitHub API, lists `.qmod` files, downloads the selected archive from `raw.githubusercontent.com`, validates its `mod.json`, and passes it through the same Android QMOD import/dependency/version-matching pipeline used by **Upload mods**. The provider URL is saved in Android app preferences. Configure another GitHub repository URL in Settings → Mod store.
 
-**Important:** this commit wires the repository URL into provider configuration only. GitHub repository listing, QMOD download, and install from the provider are not yet implemented; use **Upload mods** to import a QMOD archive in this build.
+**Current limitation:** the existing app library/import backend stores one imported mod at a time. Installing a different provider mod is blocked until the current mod is removed; reinstalling/updating the same mod ID is allowed. This provider flow has not yet been exercised on a physical Quest.
 
 ## Meta sign-in for Gorilla Tag APK downloads
 
