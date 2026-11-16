@@ -237,7 +237,7 @@ function modRow(m) {
   </div>`;
 }
 function updateGame() {
-  setHtml($('game-head'), `<img class="ic" src="orion-icon.png" alt=""><div class="spacer"><h1>Gorilla Tag</h1><div class="meta">${gameMeta()}</div></div>${playBtn(false)}<button class="round" style="width:48px;height:48px" data-settings="game" aria-label="Game settings">${ic('gear')}</button>`);
+  setHtml($('game-head'), `<img class="ic" src="download.png" alt="GorillaRinth"><div class="spacer"><h1>Gorilla Tag</h1><div class="meta">${gameMeta()}</div></div>${playBtn(false)}<button class="round" style="width:48px;height:48px" data-settings="game" aria-label="Game settings">${ic('gear')}</button>`);
   if ($('device-tab')) { setHtml($('device-tab'), deviceTab()); return; }
   setHtml($('issues'), issueBanners());
   const on = enabledMods().length, all = S.library.length;
@@ -478,12 +478,6 @@ function openDetail(src, id) {
 }
 $('detail').addEventListener('close', () => { detailRef = null; });
 
-const CREDITS = [
-  ['Stripes', 'Driftrinth developer and UI contributor'],
-  ['MeiMei', 'Driftrinth contributor and mod creator'],
-  ['Claude', 'AI Coding Assistant'],
-  ['Driftrinth', 'Original renderer, layout and UI source'],
-];
 // The slider's markup never changes, so background refreshes can't replace it while it is being dragged.
 function syncSpeedSlider() {
   const r = $('rgb-speed');
@@ -492,7 +486,7 @@ function syncSpeedSlider() {
   const secs = Math.round(360 / window.appearance.rgbSpeed);
   $('rgb-speed-label').textContent = secs >= 60 ? `One cycle per ${+(secs / 60).toFixed(1)} min` : `One cycle per ${secs} sec`;
 }
-const SETTINGS_TABS = { connection: ['wifi', 'Connection'], store: ['store', 'Mod store'], game: ['box', 'Game'], appearance: ['palette', 'Appearance'], about: ['info', 'About'], credits: ['heart', 'Credits'] };
+const SETTINGS_TABS = { connection: ['wifi', 'Connection'], store: ['store', 'Mod store'], game: ['box', 'Game'], appearance: ['palette', 'Appearance'], about: ['info', 'About'] };
 function renderSettings() {
   for (const [k, [i, t]] of Object.entries(SETTINGS_TABS)) {
     const b = $('st-' + k); b.classList.toggle('on', settingsTab === k); setHtml(b, ic(i) + t);
@@ -513,14 +507,12 @@ function renderSettings() {
       <section><h3>Installed game</h3><p>${S.game ? `Gorilla Tag ${esc(S.game.versionName)} (${esc(S.game.versionCode)})` : 'Gorilla Tag is not installed.'}</p></section>`);
   } else if (settingsTab === 'appearance') {
     const A = window.appearance;
-    const swatch = { blue: '#4f9cff', cyan: '#22d3ee', purple: '#c78aff', pink: '#ff7ab8', red: '#ff6984', orange: '#ffa347', green: '#1bd96a', rgb: 'conic-gradient(#ff3b3b, #ffd23b, #3bff6a, #3bd5ff, #5a3bff, #ff3bd5, #ff3b3b)' };
+    const swatch = { yellow: '#ffd43b', blue: '#4f9cff', cyan: '#22d3ee', purple: '#c78aff', pink: '#ff7ab8', red: '#ff6984', orange: '#ffa347', green: '#1bd96a', rgb: 'conic-gradient(#ff3b3b, #ffd23b, #3bff6a, #3bd5ff, #5a3bff, #ff3bd5, #ff3b3b)' };
     setHtml(el, `<section><h3>Mode</h3><div class="mode-grid">${Object.entries(A.MODES).map(([k, n]) => `<button class="mode-card" data-setmode="${k}" aria-pressed="${A.mode === k}"><div class="mode-prev ${k}"><i></i><div class="pr"><div class="pc"></div><div class="pb"></div></div></div><div class="mode-label"><span>${n}</span>${A.mode === k ? ic('check') : ''}</div></button>`).join('')}</div></section>
       <section><h3>Theme</h3><div class="theme-grid">${Object.entries(A.THEMES).map(([k, t]) => `<button class="theme-chip" data-settheme="${k}" aria-pressed="${A.theme === k}"><span class="theme-dot" style="background:${swatch[k]}"></span>${t.name}</button>`).join('')}</div>${A.theme === 'rgb' ? '<div class="speed"><label class="speed-head" for="rgb-speed"><span>RGB speed</span><span id="rgb-speed-label"></span></label><div class="speed-row"><span>Slow</span><input type="range" id="rgb-speed" min="1" max="36" step="1" aria-label="RGB speed"><span>Fast</span></div></div>' : ''}</section>`);
     syncSpeedSlider();
-  } else if (settingsTab === 'credits') {
-    setHtml(el, `<section><h3>Credits</h3><div class="credits">${CREDITS.map(([n, r]) => `<div class="credit"><b>${esc(n)}</b><span>${esc(r)}</span></div>`).join('')}</div><p style="margin-top:14px">Font: Inter, under the SIL Open Font License.</p></section>`);
   } else {
-    setHtml(el, `<section><div class="about-mark">${MARK}GorillaRinth</div><p>Version ${esc(S.version)}. A Gorilla Tag companion and mod manager.</p><p>UI source: Driftrinth. Credits to its contributors.</p></section>`);
+    setHtml(el, `<section><div class="about-mark">${MARK}GorillaRinth</div><p>Version ${esc(S.version)}. A Gorilla Tag companion and mod manager.</p></section>`);
   }
 }
 
