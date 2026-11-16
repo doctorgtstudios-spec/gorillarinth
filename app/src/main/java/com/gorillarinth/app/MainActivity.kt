@@ -736,7 +736,11 @@ class MainActivity : ComponentActivity() {
             }
             // QMOD manifests declare native payloads in modFiles (not only libraryFiles).
             // QMOD packageVersion is the target Android game's version (not the mod's own "version").
-            val gameVersionPlan = resolveQmodGameVersion(parsed)
+            val gameVersionPlan = runCatching { resolveQmodGameVersion(parsed) }.getOrElse { error ->
+                JSONObject().put("status", "lookup-failed")
+                    .put("targetVersion", parsed.optString("packageVersion"))
+                    .put("message", "Could not check OculusDB right now: ${error.message ?: "network error"}. The mod was still imported.")
+            }
             parsed.put("gameVersionMatch", gameVersionPlan)
             val dependencyReport = resolveQmodDependencies(temp, parsed)
             if (dependencyReport.length() > 0) parsed.put("resolvedDependencies", dependencyReport)
