@@ -5,7 +5,6 @@ import android.os.Build
 import com.android.apksig.ApkSigner
 import com.android.apksig.ApkVerifier
 import com.reandroid.apk.ApkModule
-import com.reandroid.arsc.value.DataType
 import java.io.File
 import java.io.FileOutputStream
 import java.math.BigInteger
@@ -61,15 +60,9 @@ object QuestLoaderApkPatcher {
             manifest.addUsesPermission("android.permission.READ_EXTERNAL_STORAGE")
             manifest.addUsesPermission("android.permission.WRITE_EXTERNAL_STORAGE")
             val application = manifest.getOrCreateApplicationElement()
-            application.getOrCreateAndroidAttribute("requestLegacyExternalStorage", 16844291).apply {
-                setDataType(DataType.BOOLEAN)
-                setData(-1)
-            }
-            // Compressed native libraries are extracted by PackageInstaller when this flag is set.
-            application.getOrCreateAndroidAttribute("extractNativeLibs", 16844010).apply {
-                setDataType(DataType.BOOLEAN)
-                setData(-1)
-            }
+            // Force extraction of native libraries from the patched APK at install time.
+            application.getOrCreateAndroidAttribute("extractNativeLibs", 16844010)
+                .setValueAsBoolean(true)
             module.writeApk(manifestPatched)
         } finally {
             runCatching { module.close() }
