@@ -91,8 +91,13 @@ class MainActivity : ComponentActivity() {
         Thread {
             val result = importArchive(uri)
             runOnUiThread {
-                if (result.first) complete(id, true, JSONObject().put("name", result.second).toString())
-                else complete(id, false, result.second)
+                if (result.first) {
+                    val plan = runCatching {
+                        JSONObject(getSharedPreferences("qmod", MODE_PRIVATE).getString("lastGameVersionMatch", "{}") ?: "{}")
+                    }.getOrDefault(JSONObject())
+                    complete(id, true, JSONObject().put("name", result.second).put("gameVersionMatch", plan).toString())
+                    openPendingQmodBuild(plan)
+                } else complete(id, false, result.second)
             }
         }.start()
     }
@@ -432,6 +437,59 @@ class MainActivity : ComponentActivity() {
             .put("version", "0.1.0")
     }
 
+    private fun resolveQmodGameVersion(manifest: JSONObject): JSONObject {
+        val packageId = manifest.optString("packageId").trim()
+        if (packageId.isNotEmpty() && packageId != "com.AnotherAxiom.GorillaTag") {
+            return JSONObject().put("status", "not-gorilla-tag")
+                .put("message", "This QMOD targets $packageId, not Gorilla Tag.")
+        }
+        val targetVersion = manifest.optString("packageVersion").trim()
+        if (targetVersion.isEmpty()) {
+            return JSONObject().put("status", "unspecified")
+                .put("message", "This QMOD does not specify packageVersion; no game build was selected.")
+        }
+        val installedVersion = runCatching {
+            packageManager.getPackageInfo("com.AnotherAxiom.GorillaTag", 0).versionName.orEmpty()
+        }.getOrDefault("")
+        if (installedVersion.equals(targetVersion, ignoreCase = true)) {
+            return JSONObject().put("status", "already-installed")
+                .put("targetVersion", targetVersion).put("installedVersion", installedVersion)
+                .put("message", "The installed Gorilla Tag version already matches this QMOD.")
+        }
+        val catalog = fetchOculusVersions()
+        val versions = catalog.optJSONArray("versions") ?: JSONArray()
+        var match: JSONObject? = null
+        for (i in 0 until versions.length()) {
+            val item = versions.optJSONObject(i) ?: continue
+            if (item.optString("version").equals(targetVersion, ignoreCase = true)) {
+                match = item
+                break
+            }
+        }
+        if (match == null) {
+            return JSONObject().put("status", "not-found")
+                .put("targetVersion", targetVersion).put("installedVersion", installedVersion)
+                .put("message", "OculusDB has no downloadable Gorilla Tag build matching QMOD packageVersion $targetVersion.")
+        }
+        return JSONObject().put("status", "download")
+            .put("targetVersion", targetVersion).put("installedVersion", installedVersion)
+            .put("appId", catalog.optString("appId"))
+            .put("versionId", match.optString("id"))
+            .put("versionCode", match.optLong("versionCode"))
+            .put("message", "Found the exact Gorilla Tag build required by this QMOD.")
+    }
+
+    private fun openPendingQmodBuild(plan: JSONObject) {
+        if (plan.optString("status") != "download") return
+        val appId = plan.optString("appId")
+        val versionId = plan.optString("versionId")
+        if (!appId.matches(Regex("[0-9]+")) || !versionId.matches(Regex("[0-9]+"))) return
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(
+            "https://developer.oculus.com/manage/applications/$appId/versions/$versionId"
+        ))
+        runCatching { startActivity(intent) }
+    }
+
     private fun fetchOculusVersions(): JSONObject {
         fun getJson(path: String): JSONObject {
             var last: Exception? = null
@@ -677,6 +735,9 @@ class MainActivity : ComponentActivity() {
                     .also { it.writeTo(File(temp, "manifest.json")) }
             }
             // QMOD manifests declare native payloads in modFiles (not only libraryFiles).
+            // QMOD packageVersion is the target Android game's version (not the mod's own "version").
+            val gameVersionPlan = resolveQmodGameVersion(parsed)
+            parsed.put("gameVersionMatch", gameVersionPlan)
             val dependencyReport = resolveQmodDependencies(temp, parsed)
             if (dependencyReport.length() > 0) parsed.put("resolvedDependencies", dependencyReport)
             nativeLibraries = temp.walkTopDown().filter {
@@ -734,6 +795,8 @@ class MainActivity : ComponentActivity() {
             importedManifest = parsed
             getSharedPreferences("mods", MODE_PRIVATE).edit()
                 .putLong("added:$modId", System.currentTimeMillis()).apply()
+            getSharedPreferences("qmod", MODE_PRIVATE).edit()
+                .putString("lastGameVersionMatch", gameVersionPlan.toString()).apply()
             true to modName
         } catch (e: Exception) {
             temp.deleteRecursively()
