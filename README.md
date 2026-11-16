@@ -15,9 +15,11 @@ An Android companion and mod-management prototype for Gorilla Tag on Quest.
 
 ## Meta sign-in for Gorilla Tag APK downloads
 
-The OculusDB version picker includes **Sign in with Meta**. It opens Meta's official Developer Dashboard in the device browser. Sign in there with the Meta account that owns Gorilla Tag, then return to GorillaRinth and choose **Open download** for the desired OculusDB version.
+The OculusDB version picker includes **Sign in with Meta**, **Open download**, and **Import downloaded APK**. Sign in through Meta's official Developer Dashboard in the device browser with the account that owns Gorilla Tag. Return to GorillaRinth, choose an OculusDB version, complete the download in the browser, then return to the version picker and import the APK from Downloads.
 
-Authentication is handled by Meta in the browser: GorillaRinth does not collect Meta passwords, read browser cookies, or claim an in-app Meta session. Meta may still restrict APK access based on account ownership and developer-dashboard permissions. OculusDB supplies version metadata; it does not grant download authorization.
+GorillaRinth validates the imported APK's package name (`com.AnotherAxiom.GorillaTag`) and version metadata before storing a private copy in its app storage. The imported APK is kept separate from the existing OBB backup and mod ZIP workflow.
+
+Authentication stays in Meta's browser: GorillaRinth does not collect Meta passwords or read browser cookies. Meta may restrict APK access based on account ownership and developer-dashboard permissions. OculusDB supplies version metadata; it does not grant download authorization. **Importing an APK does not yet patch it with QuestLoader or install it.**
 
 ## Wireless ADB setup
 1. Put GorillaRinth and the Quest on the same Wi-Fi network.
