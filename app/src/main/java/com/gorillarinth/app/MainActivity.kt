@@ -496,6 +496,12 @@ class MainActivity : ComponentActivity() {
                     .also { it.put("nativeLibraries", JSONArray(labels)) }
                     .also { it.writeTo(File(temp, "manifest.json")) }
             }
+            // Align declared Unity metadata with the Unity version actually shipped in the installed Gorilla Tag build.
+            installedGorillaTagUnityVersion()?.let { gameUnityVersion ->
+                listOf("unityVersion", "unity_version", "unity").forEach { key ->
+                    if (parsed.has(key) && !parsed.isNull(key)) parsed.put(key, gameUnityVersion)
+                }
+            }
             val modName = parsed.optString("name").trim()
             require(modName.isNotEmpty()) { "The mod manifest must contain a name." }
             val modId = parsed.optString("id", modName).trim()
@@ -518,6 +524,22 @@ class MainActivity : ComponentActivity() {
             temp.deleteRecursively()
             false to (e.message ?: "Import failed.")
         }
+    }
+
+    private fun installedGorillaTagUnityVersion(): String? {
+        return runCatching {
+            val gameContext = createPackageContext(
+                "com.AnotherAxiom.GorillaTag",
+                android.content.Context.CONTEXT_IGNORE_SECURITY
+            )
+            gameContext.assets.open("bin/Data/globalgamemanagers").use { input ->
+                val header = ByteArray(128)
+                val count = input.read(header)
+                if (count <= 0) return@runCatching null
+                val text = String(header, 0, count, Charsets.UTF_8)
+                Regex("20\\d{2}\\.\\d+\\.\\d+[abfp]\\d+").find(text)?.value
+            }
+        }.getOrNull()
     }
 
     private fun JSONObject.writeTo(file: File) {
