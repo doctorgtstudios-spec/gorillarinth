@@ -7,9 +7,6 @@ import android.os.Bundle
 import android.widget.Toast
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
 import org.json.JSONObject
 import java.util.zip.ZipInputStream
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +36,7 @@ import androidx.compose.ui.unit.sp
 
 private data class AppTheme(val name: String, val accent: Color, val dark: Boolean)
 private val themes = listOf(
-    AppTheme("Gorilla Yellow", Color(0xFFFFD21F), true),
+    AppTheme("Driftrinth Blue", Color(0xFF5B9BFF), true),
     AppTheme("Green", Color(0xFF54D68B), true),
     AppTheme("Blue", Color(0xFF62A9FF), true),
     AppTheme("Purple", Color(0xFFB58AFF), true),
@@ -63,10 +60,6 @@ private fun GorillaRinthApp() {
     var importStatus by remember { mutableStateOf("No archive imported yet.") }
     var importing by remember { mutableStateOf(false) }
     var questModManifest by remember { mutableStateOf<QuestModManifest?>(null) }
-    var catalogQuery by remember { mutableStateOf("Gorilla Tag") }
-    var catalogHits by remember { mutableStateOf(emptyList<ModrinthHit>()) }
-    var catalogStatus by remember { mutableStateOf("Search Modrinth projects.") }
-    var catalogLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var pairingCode by remember { mutableStateOf("") }
     val context = LocalContext.current
@@ -93,8 +86,8 @@ private fun GorillaRinthApp() {
             }
         }
     }
-    val bg = if (selectedTheme.dark) Color(0xFF111318) else Color(0xFFF4F4F0)
-    val panel = if (selectedTheme.dark) Color(0xFF1B1F26) else Color.White
+    val bg = if (selectedTheme.dark) Color(0xFF101722) else Color(0xFFF4F4F0)
+    val panel = if (selectedTheme.dark) Color(0xFF1A2635) else Color.White
     val fg = if (selectedTheme.dark) Color(0xFFF4F4F4) else Color(0xFF171717)
     val muted = if (selectedTheme.dark) Color(0xFF9AA1AD) else Color(0xFF666666)
 
@@ -166,52 +159,30 @@ private fun GorillaRinthApp() {
                         Text("ZIP import is available. Game launch opens the installed Gorilla Tag app; mod installation and patching are not active yet.", color = muted, fontSize = 11.sp)
                     }
                     "Mods" -> {
-                        Text("Modrinth", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                        Text("Discover projects and manage local imports.", color = muted)
+                        Text("Mods", color = fg, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                        Text("Manage your GorillaRinth mod library.", color = muted)
                         Spacer(Modifier.height(12.dp))
-                        var modTab by remember { mutableStateOf("Discover") }
+                        var modTab by remember { mutableStateOf("Store") }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(selected = modTab == "Discover", onClick = { modTab = "Discover" }, label = { Text("Discover") })
-                            FilterChip(selected = modTab == "Library", onClick = { modTab = "Library" }, label = { Text("My files") })
+                            FilterChip(selected = modTab == "Store", onClick = { modTab = "Store" }, label = { Text("Store") })
+                            FilterChip(selected = modTab == "Library", onClick = { modTab = "Library" }, label = { Text("Library") })
                         }
-                        if (modTab == "Discover") {
+                        if (modTab == "Store") {
                             CardBlock(panel, selectedTheme.accent) {
-                                Text("Browse Modrinth", color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                Text("Search the Modrinth public project catalog.", color = muted, fontSize = 12.sp)
-                                Spacer(Modifier.height(10.dp))
-                                OutlinedTextField(value = catalogQuery, onValueChange = { catalogQuery = it }, label = { Text("Search projects") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                                Spacer(Modifier.height(8.dp))
-                                Button(onClick = {
-                                    if (catalogQuery.isBlank()) { catalogStatus = "Enter a search term." } else {
-                                        catalogLoading = true
-                                        catalogStatus = "Searching Modrinth…"
-                                        scope.launch {
-                                            val result = withContext(Dispatchers.IO) { searchModrinth(catalogQuery) }
-                                            catalogHits = result.first
-                                            catalogStatus = result.second
-                                            catalogLoading = false
-                                        }
-                                    }
-                                }, enabled = !catalogLoading, modifier = Modifier.fillMaxWidth()) { Text(if (catalogLoading) "Searching…" else "Search Modrinth") }
-                            }
-                            Text(catalogStatus, color = muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
-                            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(catalogHits.size) { index ->
-                                    val hit = catalogHits[index]
-                                    Card(colors = CardDefaults.cardColors(containerColor = panel), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().clickable {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://modrinth.com/${hit.projectType}/${hit.slug}"))
-                                        context.startActivity(intent)
-                                    }) {
-                                        Column(Modifier.padding(14.dp)) {
-                                            Text(hit.title, color = fg, fontWeight = FontWeight.Bold)
-                                            Text("by ${hit.author} • ${hit.projectType}", color = selectedTheme.accent, fontSize = 11.sp)
-                                            Text(hit.description, color = muted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
-                                            Text("${hit.downloads} downloads • Open project ↗", color = muted, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
-                                        }
+                                Text("GorillaRinth Store", color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text("Official community mod catalog", color = muted, fontSize = 12.sp)
+                                Spacer(Modifier.height(18.dp))
+                                Box(Modifier.fillMaxWidth().height(130.dp), contentAlignment = Alignment.Center) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Filled.CloudOff, null, tint = muted, modifier = Modifier.size(34.dp))
+                                        Spacer(Modifier.height(8.dp))
+                                        Text("Store is coming soon", color = fg, fontWeight = FontWeight.Bold)
+                                        Text("Server catalog will be connected later.", color = muted, fontSize = 12.sp)
                                     }
                                 }
                             }
                         } else {
+ {
                             CardBlock(panel, selectedTheme.accent) {
                                 Icon(Icons.Filled.Extension, tint = selectedTheme.accent, contentDescription = null, modifier = Modifier.size(30.dp))
                                 Spacer(Modifier.height(8.dp))
@@ -246,6 +217,7 @@ private fun GorillaRinthApp() {
                                 }
                             }
                         }
+
                         Spacer(Modifier.height(8.dp))
                         Text("Important: Modrinth is primarily a Minecraft project catalog, not a verified Gorilla Tag Quest mod repository. Search results are not confirmed compatible. The current official community Quest guide documents QuestPatcher on a computer; GorillaRinth cannot yet install or activate mods on standalone Quest by itself.", color = muted, fontSize = 11.sp)
                     }
@@ -298,7 +270,11 @@ private fun GorillaRinthApp() {
                         Spacer(Modifier.height(12.dp))
                         CardBlock(panel, selectedTheme.accent) {
                             Text("About GorillaRinth", color = fg, fontWeight = FontWeight.Bold)
-                            Text("Version 0.1.0 • Early UI prototype", color = muted, fontSize = 13.sp)
+                            Text("Version 0.1.0 • Gorilla Tag Quest mod manager", color = muted, fontSize = 13.sp)
+                            Spacer(Modifier.height(14.dp))
+                            HorizontalDivider()
+                            Text("Credits", color = fg, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
+                            Text("UI inspiration: Driftrinth. Credits to its contributors, including Stripes and MeiMei.", color = muted, fontSize = 12.sp)
                         }
                     }
                 }
@@ -402,37 +378,6 @@ private fun launchGorillaTag(context: android.content.Context) {
         .onFailure { Toast.makeText(context, "Could not launch Gorilla Tag: ${it.message}", Toast.LENGTH_LONG).show() }
 }
 
-private data class ModrinthHit(val title: String, val author: String, val description: String, val projectType: String, val slug: String, val downloads: Int)
-
-private fun searchModrinth(query: String): Pair<List<ModrinthHit>, String> {
-    var connection: HttpURLConnection? = null
-    return try {
-        val encoded = URLEncoder.encode(query, "UTF-8")
-        connection = (URL("https://api.modrinth.com/v2/search?query=$encoded&limit=15").openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 12000
-            readTimeout = 12000
-            setRequestProperty("User-Agent", "GorillaRinth/0.1.0 (https://github.com/doctorgtstudios-spec/gorillarinth)")
-        }
-        if (connection.responseCode !in 200..299) return emptyList<ModrinthHit>() to "Modrinth returned HTTP ${connection.responseCode}."
-        val body = connection.inputStream.bufferedReader().use { it.readText() }
-        val hits = JSONObject(body).optJSONArray("hits") ?: return emptyList<ModrinthHit>() to "No results returned."
-        val results = (0 until hits.length()).mapNotNull { index ->
-            val item = hits.optJSONObject(index) ?: return@mapNotNull null
-            ModrinthHit(
-                title = item.optString("title", "Untitled project"),
-                author = item.optString("author", "Unknown author"),
-                description = item.optString("description", ""),
-                projectType = item.optString("project_type", "project"),
-                slug = item.optString("slug", item.optString("project_id", "")),
-                downloads = item.optInt("downloads", 0)
-            )
-        }
-        results to "Found ${results.size} projects. Tap a card to view its Modrinth page."
-    } catch (e: Exception) {
-        emptyList<ModrinthHit>() to "Search failed: ${e.message ?: "Network error"}"
-    } finally { connection?.disconnect() }
-}
 private data class QuestModManifest(val manifestVersion: String, val name: String, val id: String, val author: String, val version: String, val dependencies: List<String>, val modFiles: List<String>, val libraryFiles: List<String>, val missingFiles: List<String>)
 
 private fun readQuestModManifest(context: android.content.Context): QuestModManifest? {
