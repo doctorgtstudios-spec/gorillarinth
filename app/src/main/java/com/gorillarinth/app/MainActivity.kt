@@ -416,13 +416,17 @@ class MainActivity : ComponentActivity() {
         }
 
         val modId = manifest.optString("id", "native-mod")
+        val applied = prefs.getBoolean(modId, false)
         prefs.edit()
-            .putBoolean(modId, true)
             .putString("nativeModDir", modsDir)
             .putString("nativeModNames", JSONArray(mods.map { it.name }).toString())
             .putString("nativeLibraryDir", libsDir)
             .putString("nativeLibraryNames", JSONArray(libraries.map { it.name }).toString())
             .apply()
+        getSharedPreferences("device", MODE_PRIVATE).edit().apply {
+            if (applied) putString("appliedModId", modId).putLong("appliedAt", System.currentTimeMillis())
+            else remove("appliedModId").remove("appliedAt")
+        }.apply()
         return JSONObject()
             .put("mods", mods.size)
             .put("nativeMods", JSONArray(mods.map { it.name }))
@@ -478,7 +482,10 @@ class MainActivity : ComponentActivity() {
         val paired = prefs.getString("host", null) != null
         val connected = adbClient?.connectionCheck() == true
         val baseFile = File(filesDir, "base_original.obb")
-        val baseUsable = baseFile.exists() && baseFile.length() > 0L
+        val nativeLibraryMod = manifest?.optString("format") == "native-library"
+        // QuestLoader native-library QMODs are installed into /Android/data/.../files
+        // and do not read or modify the game's OBB at all.
+        val baseUsable = (baseFile.exists() && baseFile.length() > 0L) || nativeLibraryMod
         val modId = manifest?.optString("id", manifest.optString("name", "local-mod"))
         val enabledMod = modId != null && getSharedPreferences("mods", MODE_PRIVATE).getBoolean(modId, false)
         val appliedModId = prefs.getString("appliedModId", null)
@@ -488,8 +495,14 @@ class MainActivity : ComponentActivity() {
             .put("device", JSONObject().put("state", if (connected) "ready" else if (paired) "lost" else "none")
                 .put("paired", paired).put("autoReconnect", prefs.getBoolean("autoReconnect", true)).put("model", "Quest"))
             .put("game", game)
-            .put("base", JSONObject().put("usable", baseUsable).put("fromModded", File(filesDir, "base_patched.obb").exists())
-                .put("name", if (baseUsable) "Original Gorilla Tag OBB" else ""))
+            .put("base", JSONObject().put("usable", baseUsable)
+                .put("nativeOnly", nativeLibraryMod && !(baseFile.exists() && baseFile.length() > 0L))
+                .put("fromModded", File(filesDir, "base_patched.obb").exists())
+                .put("name", when {
+                    nativeLibraryMod && !(baseFile.exists() && baseFile.length() > 0L) -> "Not required for QuestLoader mods"
+                    baseFile.exists() && baseFile.length() > 0L -> "Original Gorilla Tag OBB"
+                    else -> ""
+                }))
             .put("checks", JSONArray())
             .put("busy", JSONObject.NULL)
             .put("appliedAt", if (appliedModId != null) prefs.getLong("appliedAt", 0L).takeIf { it > 0L } ?: JSONObject.NULL else JSONObject.NULL)
@@ -785,7 +798,7 @@ class MainActivity : ComponentActivity() {
                     "openMetaLogin" -> {
                         // Delegate authentication to Meta's official HTTPS sign-in page.
                         // GorillaRinth never handles or stores Meta passwords or browser cookies.
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://developers.meta.com/vr/manage/"))
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://accountscenter.meta.com/"))
                         runOnUiThread {
                             try {
                                 startActivity(intent)
