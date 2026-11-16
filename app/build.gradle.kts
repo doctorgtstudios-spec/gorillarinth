@@ -31,5 +31,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("com.flyfishxu:kadb:1.3.0")
+    implementation("io.github.reandroid:ARSCLib:1.4.0")
+    implementation("com.android.tools.build:apksig:8.9.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
