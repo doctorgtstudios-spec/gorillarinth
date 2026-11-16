@@ -929,6 +929,9 @@ class MainActivity : ComponentActivity() {
         val mods = JSONArray()
         val urls = JSONObject()
         val prefs = getSharedPreferences("mods", MODE_PRIVATE)
+        val currentManifest = readManifest()
+        val currentModId = currentManifest?.optString("id",
+            currentManifest.optString("name", "")) ?: ""
         for (i in 0 until nodes.length()) {
             val node = nodes.optJSONObject(i) ?: continue
             val path = node.optString("path")
@@ -952,7 +955,7 @@ class MainActivity : ComponentActivity() {
                 .put("bytes", size)
                 .put("updated", node.optString("last_commit_date", ""))
                 .put("tags", JSONArray().put("QMOD"))
-                .put("installed", prefs.getBoolean("storeInstalled:$id", false))
+                .put("installed", prefs.getString("storeInstalledModId:$id", null) == currentModId && currentModId.isNotBlank())
                 .put("update", false))
         }
         getSharedPreferences("mod_store", MODE_PRIVATE).edit()
@@ -993,6 +996,24 @@ class MainActivity : ComponentActivity() {
         } finally { connection.disconnect() }
     }
 
+    private fun qmodIdentity(file: File): Pair<String, String> {
+        ZipInputStream(file.inputStream().buffered()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (!entry.isDirectory && entry.name.substringAfterLast('/').equals("mod.json", true)) {
+                    val bytes = zip.readBytes()
+                    require(bytes.size <= 2 * 1024 * 1024) { "QMOD manifest is too large." }
+                    val json = JSONObject(bytes.toString(Charsets.UTF_8))
+                    val id = json.optString("id", json.optString("name", "")).trim()
+                    require(id.isNotBlank()) { "QMOD manifest has no mod id or name." }
+                    return id to json.optString("name", id)
+                }
+                zip.closeEntry()
+            }
+        }
+        error("Downloaded archive has no mod.json and is not a supported QMOD.")
+    }
+
     private fun installFromGitHubQmodProvider(itemId: String): String {
         require(itemId.isNotBlank() && itemId.length <= 1024) { "Invalid provider item." }
         val urls = JSONObject(getSharedPreferences("mod_store", MODE_PRIVATE)
@@ -1003,10 +1024,16 @@ class MainActivity : ComponentActivity() {
         archive.delete()
         try {
             downloadProviderQmod(url, archive)
+            val (incomingId, _) = qmodIdentity(archive)
+            val existing = readManifest()
+            val existingId = existing?.optString("id", existing.optString("name", "")) ?: ""
+            require(existing == null || existingId == incomingId) {
+                "GorillaRinth currently stores one imported mod at a time. Remove the existing mod before installing a different one."
+            }
             val imported = importArchive(Uri.fromFile(archive))
             check(imported.first) { imported.second }
             getSharedPreferences("mods", MODE_PRIVATE).edit()
-                .putBoolean("storeInstalled:$itemId", true).apply()
+                .putString("storeInstalledModId:$itemId", incomingId).apply()
             return JSONObject().put("name", imported.second).put("source", url).toString()
         } finally { archive.delete() }
     }
