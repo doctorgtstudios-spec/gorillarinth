@@ -22,6 +22,8 @@
     openOculusVersion: (appId, versionId) => call('openOculusVersion', appId, versionId),
     openMetaLogin: () => call('openMetaLogin'),
     importDownloadedApk: () => call('importDownloadedApk'),
+    downloadMatchedApk: () => call('downloadMatchedApk'),
+    installImportedApk: () => call('installImportedApk'),
     pair: (port, code, connectPort) => call('pair', port, code, connectPort),
     pairingPort: () => call('pairingPort'),
     reconnect: () => call('reconnect'),
