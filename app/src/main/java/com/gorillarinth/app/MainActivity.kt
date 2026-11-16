@@ -223,6 +223,9 @@ class MainActivity : ComponentActivity() {
         val remote = getSharedPreferences("device", MODE_PRIVATE).getString("obbPath", null)
             ?: error("Pull the original game OBB before applying mods.")
         val manifest = readManifest()
+        if (manifest?.optString("format") == "native-library") {
+            error("Native .so libraries were detected and imported, but GorillaRinth does not yet have a Quest native mod loader to load them.")
+        }
         val modId = manifest?.optString("id", manifest.optString("name", "local-mod"))
         val enabled = modId != null && getSharedPreferences("mods", MODE_PRIVATE).getBoolean(modId, false)
         shellChecked(client, "am force-stop com.AnotherAxiom.GorillaTag")
@@ -471,10 +474,30 @@ class MainActivity : ComponentActivity() {
             } ?: error("Could not read selected archive.")
             val modJson = temp.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) }
                 ?: temp.walkTopDown().firstOrNull { it.isFile && it.name.equals("manifest.json", true) }
-                ?: error("Archive extracted, but no mod.json or manifest.json was found.")
-            val parsed = JSONObject(modJson.readText())
+            val nativeLibraries = temp.walkTopDown().filter {
+                it.isFile && it.extension.equals("so", true)
+            }.toList()
+            val parsed = if (modJson != null) {
+                JSONObject(modJson.readText())
+            } else {
+                require(nativeLibraries.isNotEmpty()) {
+                    "No mod.json, manifest.json, or .so native library files were found in this archive."
+                }
+                val labels = nativeLibraries.map { it.name }.distinct()
+                val baseName = labels.first().removeSuffix(".so").removePrefix("lib")
+                    .replace(Regex("[^A-Za-z0-9]+"), " ").trim()
+                JSONObject()
+                    .put("name", baseName.ifBlank { "Native library mod" })
+                    .put("id", "native-" + labels.joinToString("-").hashCode().toUInt().toString(16))
+                    .put("version", "unknown")
+                    .put("author", "Unknown")
+                    .put("description", "Detected ${nativeLibraries.size} .so native library file(s). A compatible Quest native mod loader is required to load them.")
+                    .put("format", "native-library")
+                    .also { it.put("nativeLibraries", JSONArray(labels)) }
+                    .also { it.writeTo(File(temp, "manifest.json")) }
+            }
             val modName = parsed.optString("name").trim()
-            require(modName.isNotEmpty()) { "The mod.json manifest must contain a name." }
+            require(modName.isNotEmpty()) { "The mod manifest must contain a name." }
             val modId = parsed.optString("id", modName).trim()
             require(modId.length <= 128 && modId.matches(Regex("[A-Za-z0-9._-]+"))) {
                 "The mod.json id may only contain letters, numbers, dots, underscores and hyphens."
@@ -495,6 +518,10 @@ class MainActivity : ComponentActivity() {
             temp.deleteRecursively()
             false to (e.message ?: "Import failed.")
         }
+    }
+
+    private fun JSONObject.writeTo(file: File) {
+        file.writeText(toString(2))
     }
 
     private fun findManifestFile(): File? {
