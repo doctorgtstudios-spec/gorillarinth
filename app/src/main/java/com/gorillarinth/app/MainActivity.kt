@@ -117,7 +117,25 @@ class MainActivity : ComponentActivity() {
                         complete(id, true, "true")
                     }
                     "openDevSettings" -> {
-                        runOnUiThread { startActivity(Intent("android.settings.APPLICATION_DEVELOPMENT_SETTINGS")) }
+                        runOnUiThread {
+                            val developerSettings = Intent("android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
+                                .setPackage("com.android.settings")
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            val androidSettings = Intent(android.provider.Settings.ACTION_SETTINGS)
+                                .setPackage("com.android.settings")
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            try {
+                                if (developerSettings.resolveActivity(packageManager) != null) {
+                                    startActivity(developerSettings)
+                                } else if (androidSettings.resolveActivity(packageManager) != null) {
+                                    startActivity(androidSettings)
+                                } else {
+                                    startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
+                                }
+                            } catch (_: Exception) {
+                                startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
+                            }
+                        }
                         complete(id, true, "true")
                     }
                     "pairingPort" -> complete(id, true, "0")
