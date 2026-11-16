@@ -170,7 +170,7 @@ const libFiltered = () => {
 function gameBuildActions() {
   const plan = S && S.qmodGameVersionMatch ? S.qmodGameVersionMatch : {};
   return `<div class="row wrap" style="margin-top:10px">
-    ${plan.status === 'download' ? '<button class="btn primary" data-download-game-build="1">${ic('download')}Download exact required build</button>' : ''}
+    ${plan.status === 'download' ? `<button class="btn primary" data-download-game-build="1">${ic('download')}Download exact required build</button>` : ''}
     ${S && S.stagedApk ? '<button class="btn line" data-install-apk="1">Install downloaded APK</button>' : ''}
     <button class="btn line" data-import-apk="1">Import downloaded Gorilla Tag APK</button>
   </div>`;
@@ -762,7 +762,8 @@ document.addEventListener('click', async (e) => {
     }
     else if (d.importApk) {
       const result = JSON.parse(await api.importDownloadedApk());
-      toast('Verified Gorilla Tag ' + result.versionName + ' APK (' + size(Number(result.size || 0)) + ') imported. Installation still requires the Android package installer.');
+      toast('Verified Gorilla Tag ' + result.versionName + ' APK imported. Tap Install downloaded APK to continue.');
+      await refresh(true);
     }
     else if (d.pair) openPair();
     else if (d.reconnect) { el.disabled = true; if (!(await api.reconnect())) toast('Still not connected. Check that Wireless debugging is on.'); await refresh(true); }
