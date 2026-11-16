@@ -477,6 +477,19 @@ class MainActivity : ComponentActivity() {
                         runOnUiThread { startActivity(intent) }
                         complete(id, true, "true")
                     }
+                    "openMetaLogin" -> {
+                        // Delegate authentication to Meta's official HTTPS sign-in page.
+                        // GorillaRinth never handles or stores Meta passwords or browser cookies.
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://developers.meta.com/vr/manage/"))
+                        runOnUiThread {
+                            try {
+                                startActivity(intent)
+                                complete(id, true, "true")
+                            } catch (e: Exception) {
+                                complete(id, false, "Could not open Meta sign-in. Install or enable a web browser and try again.")
+                            }
+                        }
+                    }
                     "storeList" -> complete(id, true, JSONObject()
                         .put("configured", false).put("mods", JSONArray())
                         .put("offline", true).put("offlineReason", "The GorillaRinth server catalog will be connected later.")
