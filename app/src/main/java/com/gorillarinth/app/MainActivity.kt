@@ -62,6 +62,7 @@ private fun GorillaRinthApp() {
     var archiveUri by remember { mutableStateOf<Uri?>(null) }
     var importStatus by remember { mutableStateOf("No archive imported yet.") }
     var importing by remember { mutableStateOf(false) }
+    var questModManifest by remember { mutableStateOf<QuestModManifest?>(null) }
     var catalogQuery by remember { mutableStateOf("Gorilla Tag") }
     var catalogHits by remember { mutableStateOf(emptyList<ModrinthHit>()) }
     var catalogStatus by remember { mutableStateOf("Search Modrinth projects.") }
@@ -76,10 +77,10 @@ private fun GorillaRinthApp() {
             )?.use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
             } ?: it.lastPathSegment?.substringAfterLast('/') ?: "Selected file"
-            if (name.endsWith(".zip", ignoreCase = true)) {
+            if (name.endsWith(".zip", ignoreCase = true) || name.endsWith(".qmod", ignoreCase = true)) {
                 archiveName = name
                 archiveUri = it
-                importStatus = "ZIP selected. Ready to inspect and extract."
+                importStatus = "Archive selected. Ready to inspect."
                 runCatching {
                     context.contentResolver.takePersistableUriPermission(
                         it, Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -88,7 +89,7 @@ private fun GorillaRinthApp() {
             } else {
                 archiveName = null
                 archiveUri = null
-                importStatus = "Please select a .zip archive."
+                importStatus = "Please select a .zip or .qmod archive."
             }
         }
     }
@@ -214,10 +215,10 @@ private fun GorillaRinthApp() {
                             CardBlock(panel, selectedTheme.accent) {
                                 Icon(Icons.Filled.Extension, tint = selectedTheme.accent, contentDescription = null, modifier = Modifier.size(30.dp))
                                 Spacer(Modifier.height(8.dp))
-                                Text("Import a local ZIP", color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                Text("Select a ZIP mod archive from device storage.", color = muted, fontSize = 12.sp)
+                                Text("Import a Quest mod", color = fg, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text("Select a .qmod package or ZIP containing mod.json and mod files.", color = muted, fontSize = 12.sp)
                                 Spacer(Modifier.height(10.dp))
-                                Button(onClick = { picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) { Text("Browse ZIP archives") }
+                                Button(onClick = { picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) { Text("Browse .qmod / .zip") }
                                 archiveName?.let { Text("Selected: $it", color = selectedTheme.accent, modifier = Modifier.padding(top = 8.dp)) }
                                 Button(onClick = {
                                     val uri = archiveUri ?: return@Button
@@ -225,11 +226,24 @@ private fun GorillaRinthApp() {
                                     importStatus = "Inspecting archive…"
                                     scope.launch {
                                         val result = withContext(Dispatchers.IO) { extractModArchive(context, uri) }
-                                        importStatus = result
+                                        questModManifest = if (result.startsWith("Imported successfully")) withContext(Dispatchers.IO) { readQuestModManifest(context) } else null
+                                        importStatus = if (result.startsWith("Imported successfully") && questModManifest == null) "$result No valid mod.json manifest was found." else result
                                         importing = false
                                     }
                                 }, enabled = archiveUri != null && !importing, modifier = Modifier.fillMaxWidth()) { Text(if (importing) "Importing…" else "Inspect & extract ZIP") }
                                 Text(importStatus, color = muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                                questModManifest?.let { manifest ->
+                                    Spacer(Modifier.height(12.dp))
+                                    HorizontalDivider()
+                                    Text("Quest mod manifest detected", color = selectedTheme.accent, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+                                    Text(manifest.name, color = fg, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                    Text("ID: ${manifest.id}  •  Version: ${manifest.version}", color = muted, fontSize = 12.sp)
+                                    Text("Author: ${manifest.author}", color = muted, fontSize = 12.sp)
+                                    Text("Manifest: ${manifest.manifestVersion}  •  Dependencies: ${manifest.dependencies.joinToString().ifBlank { "None" }}", color = muted, fontSize = 11.sp)
+                                    Text("Mod files: ${manifest.modFiles.joinToString().ifBlank { "None listed" }}", color = muted, fontSize = 11.sp)
+                                    Text("Library files: ${manifest.libraryFiles.joinToString().ifBlank { "None listed" }}", color = muted, fontSize = 11.sp)
+                                    Text(if (manifest.missingFiles.isEmpty()) "All listed files were found." else "Missing files: ${manifest.missingFiles.joinToString()}", color = if (manifest.missingFiles.isEmpty()) selectedTheme.accent else Color(0xFFFF6B6B), fontSize = 11.sp)
+                                }
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -418,4 +432,26 @@ private fun searchModrinth(query: String): Pair<List<ModrinthHit>, String> {
     } catch (e: Exception) {
         emptyList<ModrinthHit>() to "Search failed: ${e.message ?: "Network error"}"
     } finally { connection?.disconnect() }
+}
+private data class QuestModManifest(val manifestVersion: String, val name: String, val id: String, val author: String, val version: String, val dependencies: List<String>, val modFiles: List<String>, val libraryFiles: List<String>, val missingFiles: List<String>)
+
+private fun readQuestModManifest(context: android.content.Context): QuestModManifest? {
+    val root = File(context.filesDir, "imported_mod")
+    val manifestFile = root.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) } ?: return null
+    return runCatching {
+        val json = JSONObject(manifestFile.readText())
+        fun stringList(key: String): List<String> {
+            val array = json.optJSONArray(key) ?: return emptyList()
+            return (0 until array.length()).mapNotNull { i -> array.optString(i).takeIf { it.isNotBlank() } }
+        }
+        val modFiles = stringList("modFiles")
+        val libraryFiles = stringList("libraryFiles")
+        val manifestDir = manifestFile.parentFile ?: root
+        val missing = (modFiles + libraryFiles).filter { listed ->
+            val candidate = File(manifestDir, listed)
+            val safeRoot = manifestDir.canonicalPath + File.separator
+            !candidate.canonicalPath.startsWith(safeRoot) || !candidate.isFile
+        }
+        QuestModManifest(json.optString("_version", "Unknown"), json.optString("name", "Unnamed mod"), json.optString("id", ""), json.optString("author", "Unknown"), json.optString("version", "Unknown"), stringList("dependsOn"), modFiles, libraryFiles, missing)
+    }.getOrNull()
 }
