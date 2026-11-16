@@ -307,7 +307,7 @@ class MainActivity : ComponentActivity() {
         } ?: false
         return JSONObject()
             .put("library", library)
-            .put("device", JSONObject().put("state", if (connected) "connected" else if (paired) "paired" else "none")
+            .put("device", JSONObject().put("state", if (connected) "ready" else if (paired) "lost" else "none")
                 .put("paired", paired).put("autoReconnect", prefs.getBoolean("autoReconnect", false)).put("model", "Quest"))
             .put("game", game)
             .put("base", JSONObject().put("usable", baseUsable).put("fromModded", File(filesDir, "base_patched.obb").exists())
