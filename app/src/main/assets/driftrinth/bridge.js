@@ -7,7 +7,7 @@
   const call = (method, ...args) => new Promise((resolve, reject) => {
     const id = next++;
     waiting.set(id, { resolve, reject });
-    window.GorillaRinthNative.call(id, method, JSON.stringify(args));
+    window.DriftrinthNative.call(id, method, JSON.stringify(args));
   });
   window.__drDone = (id, ok, value) => {
     const w = waiting.get(id);
