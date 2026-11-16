@@ -15,11 +15,11 @@ An Android companion and mod-management prototype for Gorilla Tag on Quest.
 
 ## Meta sign-in for Gorilla Tag APK downloads
 
-The OculusDB version picker includes **Sign in with Meta**, **Open download**, and **Import downloaded APK**. Sign in through Meta's official Developer Dashboard in the device browser with the account that owns Gorilla Tag. Return to GorillaRinth, choose an OculusDB version, complete the download in the browser, then return to the version picker and import the APK from Downloads.
+## Automatic QMOD game-version matching
 
-GorillaRinth validates the imported APK's package name (`com.AnotherAxiom.GorillaTag`) and version metadata before storing a private copy in its app storage. The imported APK is kept separate from the existing OBB backup and mod ZIP workflow.
+When a QMOD is imported, GorillaRinth reads `packageId` and `packageVersion` from its `mod.json`. The QMOD `version` field is the mod's own release version; `packageVersion` is the target Android game's version. GorillaRinth checks the installed Gorilla Tag `versionName`. If it differs, GorillaRinth looks for an exact matching downloadable version in OculusDB and opens that build's Meta Developer Dashboard page automatically—there is no manual version picker. This follows the QMOD manifest schema's definition of `packageVersion`.
 
-Authentication stays in Meta's browser: GorillaRinth does not collect Meta passwords or read browser cookies. Meta may restrict APK access based on account ownership and developer-dashboard permissions. OculusDB supplies version metadata; it does not grant download authorization. **Importing an APK does not yet patch it with QuestLoader or install it.**
+After downloading the matched APK through Meta, use **Import downloaded Gorilla Tag APK**. GorillaRinth validates the package name and version metadata before storing a private copy. Meta authentication remains in the browser; GorillaRinth does not collect passwords or browser cookies. Meta may restrict APK access based on account ownership and developer-dashboard permissions. OculusDB supplies version metadata, not download authorization. **This flow auto-selects the required build but does not silently install or patch it; Android's package installer still requires user confirmation, and QuestLoader APK patching is a separate unfinished feature.**
 
 ## Wireless ADB setup
 1. Put GorillaRinth and the Quest on the same Wi-Fi network.
