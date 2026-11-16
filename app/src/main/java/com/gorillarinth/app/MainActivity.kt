@@ -466,12 +466,27 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             } ?: error("Could not read selected archive.")
-            if (root.exists()) root.deleteRecursively()
-            if (!temp.renameTo(root)) error("Could not save imported archive.")
-            val modJson = root.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) }
+            val modJson = temp.walkTopDown().firstOrNull { it.isFile && it.name.equals("mod.json", true) }
                 ?: error("Archive extracted, but no mod.json manifest was found.")
-            importedManifest = JSONObject(modJson.readText())
-            true to importedManifest?.optString("name", "Imported mod").orEmpty()
+            val parsed = JSONObject(modJson.readText())
+            val modName = parsed.optString("name").trim()
+            require(modName.isNotEmpty()) { "The mod.json manifest must contain a name." }
+            val modId = parsed.optString("id", modName).trim()
+            require(modId.length <= 128 && modId.matches(Regex("[A-Za-z0-9._-]+"))) {
+                "The mod.json id may only contain letters, numbers, dots, underscores and hyphens."
+            }
+            val previous = File(filesDir, "imported_mod_previous")
+            previous.deleteRecursively()
+            if (root.exists() && !root.renameTo(previous)) error("Could not preserve the existing mod before importing.")
+            if (!temp.renameTo(root)) {
+                if (previous.exists()) previous.renameTo(root)
+                error("Could not save imported archive.")
+            }
+            previous.deleteRecursively()
+            importedManifest = parsed
+            getSharedPreferences("mods", MODE_PRIVATE).edit()
+                .putLong("added:$modId", System.currentTimeMillis()).apply()
+            true to modName
         } catch (e: Exception) {
             temp.deleteRecursively()
             false to (e.message ?: "Import failed.")
