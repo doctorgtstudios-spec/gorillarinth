@@ -18,6 +18,8 @@
   window.__drProgress = (p) => listeners.forEach((cb) => cb(p));
   window.gorillarinth = {
     state: () => call('state'),
+    oculusVersions: () => call('oculusVersions'),
+    openOculusVersion: (appId, versionId) => call('openOculusVersion', appId, versionId),
     pair: (port, code, connectPort) => call('pair', port, code, connectPort),
     pairingPort: () => call('pairingPort'),
     reconnect: () => call('reconnect'),
