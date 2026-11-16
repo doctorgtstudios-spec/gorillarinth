@@ -181,7 +181,7 @@ function mountHome() {
     <h1 class="h">Jump in</h1>
     <div class="card jump" id="jump"></div>
     <div id="setup"></div>
-    <div class="section"><div class="card" style="padding:14px"><b>Automatic game-version matching</b><p class="muted" style="margin:6px 0 0">When you import a QMOD, GorillaRinth reads its <code>packageVersion</code>, checks the installed Gorilla Tag build, and looks up that exact build on OculusDB if needed. No manual version picker.</p>${gameBuildActions()}</div></div>
+    <div class="section"><div class="card" style="padding:14px"><b>Automatic game-version matching</b><p class="muted" style="margin:6px 0 0">When you import a QMOD, GorillaRinth reads its <code>packageVersion</code>, checks the installed Gorilla Tag build, and looks up that exact build on OculusDB if needed. No manual version picker.</p><div id="game-build-actions">${gameBuildActions()}</div></div></div>
     <div class="section">
       <h1 class="h">Library</h1>
       <div class="toolbar" style="margin-top:0">
@@ -194,6 +194,7 @@ function mountHome() {
   </div>`;
 }
 function updateHome() {
+  setHtml($('game-build-actions'), gameBuildActions());
   setHtml($('jump'), `<div class="art"></div><div class="ic game-glyph">GT</div><div><h2>Gorilla Tag</h2><div class="meta">${gameMeta()}</div>${playBtn(true)}</div>`);
   setHtml($('setup'), setupCard() || issueBanners());
   const l = libFiltered();
@@ -216,7 +217,7 @@ function mountGame() {
     </div>
     ${tab === 'content' ? `
     <div id="issues"></div>
-    <div class="card" style="padding:16px;margin:12px 0"><b>Automatic QMOD compatibility</b><p class="muted" style="margin:6px 0 0">Upload a QMOD to match its declared Gorilla Tag packageVersion. GorillaRinth opens the exact Meta build page when your installed game does not match.</p>${gameBuildActions()}</div>
+    <div class="card" style="padding:16px;margin:12px 0"><b>Automatic QMOD compatibility</b><p class="muted" style="margin:6px 0 0">Upload a QMOD to match its declared Gorilla Tag packageVersion. GorillaRinth can download the exact matched build after you provide an authorized Meta download token.</p><div id="game-build-actions">${gameBuildActions()}</div></div>
     <div class="toolbar">
       <div class="search">${ic('search')}<input id="lib-q" type="search" placeholder="Search mods" value="${esc(lib.q)}" autocomplete="off"></div>
       <button class="btn line" data-upload="1">${ic('folder')}Upload mods</button>
@@ -251,6 +252,7 @@ function updateGame() {
   setHtml($('game-head'), `<img class="ic" src="download.png" alt="GorillaRinth"><div class="spacer"><h1>Gorilla Tag</h1><div class="meta">${gameMeta()}</div></div>${playBtn(false)}<button class="round" style="width:48px;height:48px" data-settings="game" aria-label="Game settings">${ic('gear')}</button>`);
   if ($('device-tab')) { setHtml($('device-tab'), deviceTab()); return; }
   setHtml($('issues'), issueBanners());
+  setHtml($('game-build-actions'), gameBuildActions());
   const on = enabledMods().length, all = S.library.length;
   setHtml($('lib-chips'), [['all', `All ${all}`], ['on', `Enabled ${on}`], ['off', `Disabled ${all - on}`]].map(([k, t]) => `<button class="chip" data-filter="${k}" aria-pressed="${lib.filter === k}">${t}</button>`).join(''));
   $('lib-sort').value = lib.sort;
