@@ -205,7 +205,8 @@ class MainActivity : ComponentActivity() {
         val remoteBackup = "$remote.gorillarinth.bak"
         val backupCheck = client.shell("if [ -f '$remoteBackup' ]; then echo exists; else echo missing; fi").allOutput.trim()
         if (backupCheck != "exists") shellChecked(client, "cp '$remote' '$remoteBackup'")
-        client.pull(original, remote)
+        // Prefer the preserved first-install backup on later pulls; never snapshot our own patched OBB as clean.
+        client.pull(original, if (backupCheck == "exists") remoteBackup else remote)
         check(original.length() > 0L) { "The downloaded OBB is empty." }
         getSharedPreferences("device", MODE_PRIVATE).edit().putString("obbPath", remote).apply()
         return remote
