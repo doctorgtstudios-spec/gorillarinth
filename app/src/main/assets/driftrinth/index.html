@@ -4,21 +4,21 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https: http: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Driftrinth</title>
+<title>GorillaRinth</title>
 <script src="theme.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="splash" id="splash" role="status" aria-label="Loading Driftrinth">
+<div class="splash" id="splash" role="status" aria-label="Loading GorillaRinth">
   <svg class="splash-art" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path stroke="var(--brand)" d="M12 2a10 10 0 1 0 9.6 7.2"/><path stroke="var(--brand)" d="M6.8 16.4c3.6-.4 6.7-2.8 8.6-5.8 1.2-1.9 2.6-3.4 4.6-4.4"/><path stroke="var(--brand-300)" d="M12 17.6c2.2-.6 4.2-2 5.6-3.8"/><circle cx="21.6" cy="4.7" r="1.7" fill="var(--brand-300)"/></svg>
   <div class="splash-center">
-    <div class="splash-logo"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path stroke="var(--brand)" d="M12 2a10 10 0 1 0 9.6 7.2"/><path stroke="var(--brand)" d="M6.8 16.4c3.6-.4 6.7-2.8 8.6-5.8 1.2-1.9 2.6-3.4 4.6-4.4"/><path stroke="var(--brand-300)" d="M12 17.6c2.2-.6 4.2-2 5.6-3.8"/><circle cx="21.6" cy="4.7" r="1.7" fill="var(--brand-300)"/></svg><span>Driftrinth <em>app</em></span></div>
+    <div class="splash-logo"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path stroke="var(--brand)" d="M12 2a10 10 0 1 0 9.6 7.2"/><path stroke="var(--brand)" d="M6.8 16.4c3.6-.4 6.7-2.8 8.6-5.8 1.2-1.9 2.6-3.4 4.6-4.4"/><path stroke="var(--brand-300)" d="M12 17.6c2.2-.6 4.2-2 5.6-3.8"/><circle cx="21.6" cy="4.7" r="1.7" fill="var(--brand-300)"/></svg><span>GorillaRinth <em>app</em></span></div>
     <div class="splash-bar"><i id="splash-fill"></i></div>
   </div>
 </div>
 <div class="shell">
   <header class="top">
-    <div class="brand"><svg class="mark" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path stroke="var(--brand)" d="M12 2a10 10 0 1 0 9.6 7.2"/><path stroke="var(--brand)" d="M6.8 16.4c3.6-.4 6.7-2.8 8.6-5.8 1.2-1.9 2.6-3.4 4.6-4.4"/><path stroke="var(--brand-300)" d="M12 17.6c2.2-.6 4.2-2 5.6-3.8"/><circle cx="21.6" cy="4.7" r="1.7" fill="var(--brand-300)"/></svg><span>Driftrinth</span></div>
+    <div class="brand"><svg class="mark" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path stroke="var(--brand)" d="M12 2a10 10 0 1 0 9.6 7.2"/><path stroke="var(--brand)" d="M6.8 16.4c3.6-.4 6.7-2.8 8.6-5.8 1.2-1.9 2.6-3.4 4.6-4.4"/><path stroke="var(--brand-300)" d="M12 17.6c2.2-.6 4.2-2 5.6-3.8"/><circle cx="21.6" cy="4.7" r="1.7" fill="var(--brand-300)"/></svg><span>GorillaRinth</span></div>
     <div class="navs">
       <button class="round" id="nav-back" aria-label="Back"></button>
       <button class="round" id="nav-fwd" aria-label="Forward"></button>
@@ -31,7 +31,7 @@
     <button class="rail-btn" data-go="discover" aria-label="Discover mods" title="Discover mods"></button>
     <button class="rail-btn" data-go="setup" aria-label="Setup" title="Setup"></button>
     <hr>
-    <button class="rail-btn game" data-go="game" aria-label="Orion Drift" title="Orion Drift"><img src="orion-icon.png" alt=""></button>
+    <button class="rail-btn game" data-go="game" aria-label="Gorilla Tag" title="Gorilla Tag"><span class="game-mark">GT</span></button>
     <hr>
     <button class="rail-btn" id="rail-add" data-upload="1" aria-label="Upload a mod" title="Upload a mod"></button>
     <div class="grow"></div>
@@ -47,7 +47,7 @@
 <dialog id="pair" aria-label="Pair headset">
   <div class="modal">
     <div class="modal-head"><h2>Pair this headset</h2><button class="round" data-close="pair" aria-label="Close" id="pair-x"></button></div>
-    <p class="muted">You only do this once. After that, Driftrinth reconnects on its own.</p>
+    <p class="muted">You only do this once. After that, GorillaRinth reconnects on its own.</p>
     <ol class="numbered">
       <li>Open Android Settings, press <b>Open</b>, then go to <b>Developer options &gt; Wireless debugging</b> and turn it on.<br><button class="btn" id="pair-open">Open Settings</button></li>
       <li>Choose <b>Pair device with pairing code</b> and keep that window beside this one.</li>
