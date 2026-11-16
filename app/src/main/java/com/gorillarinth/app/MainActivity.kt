@@ -242,6 +242,10 @@ class MainActivity : ComponentActivity() {
             }
         }
         check(patched.length() > 0L) { "Patched OBB output is empty." }
+        ZipFile(patched).use { archive ->
+            check(archive.entries().hasMoreElements()) { "Patched OBB has no archive entries." }
+        }
+        shellChecked(client, "am force-stop com.AnotherAxiom.GorillaTag")
         val remote = getSharedPreferences("device", MODE_PRIVATE).getString("obbPath", null)
             ?: error("Pull the original game OBB before applying mods.")
         val tempRemote = "$remote.gorillarinth.tmp"
