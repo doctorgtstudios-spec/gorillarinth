@@ -144,7 +144,7 @@ function setupCard() {
     : 'One time only. GorillaRinth reconnects on its own after this.';
   return `<div class="card setup">
     <div class="step ${dev ? 'done' : ''}"><span class="num">${dev ? ic('check') : st === 'reconnecting' ? '<span class="spin"></span>' : '1'}</span><div class="t"><b>Pair your headset</b><small>${devText}</small></div><div class="row">${a}</div></div>
-    <div class="step ${S.base && S.base.usable ? 'done' : ''}"><span class="num">${S.base && S.base.usable ? ic('check') : '2'}</span><div class="t"><b>Save a clean copy of the game file</b><small>${S.base && S.base.usable ? esc(S.base.name) : pulling ? 'Copying. You can keep using the app.' : 'Mods are built from this copy, even if the game is already modded. It takes about 3 GB of space.'}</small>${pulling && task ? `<div class="bar"><i style="width:${Math.round(task.fraction * 100)}%"></i></div>` : ''}</div>${b}</div>
+    <div class="step ${S.base && S.base.usable ? 'done' : ''}"><span class="num">${S.base && S.base.usable ? ic('check') : '2'}</span><div class="t"><b>${S.base && S.base.nativeOnly ? 'Game backup not needed' : 'Save a clean copy of the game file'}</b><small>${S.base && S.base.usable ? esc(S.base.name) : pulling ? 'Copying. You can keep using the app.' : 'OBB-based mods need a clean backup of the game data before changes can be applied.'}</small>${pulling && task ? `<div class="bar"><i style="width:${Math.round(task.fraction * 100)}%"></i></div>` : ''}</div>${b}</div>
   </div>`;
 }
 
@@ -173,7 +173,7 @@ function gameBuildActions() {
     ${plan.status === 'download' ? `<button class="btn primary" data-download-game-build="1">${ic('download')}Download exact required build</button>` : ''}
     ${S && S.stagedApk ? '<button class="btn line" data-install-apk="1">Install downloaded APK</button><button class="btn primary" data-patch-apk="1">Patch APK with QuestLoader</button>' : ''}
     ${S && S.patchedApk ? '<button class="btn line" data-uninstall-game="1">Uninstall official game (required)</button><button class="btn primary" data-install-patched-apk="1">Install patched Gorilla Tag</button>' : ''}
-    <button class="btn line" data-meta-login="1">Sign in to Meta / get download token</button>
+    <button class="btn line" data-meta-login="1">Open Meta account settings</button>
     <button class="btn line" data-import-apk="1">Import downloaded Gorilla Tag APK</button>
   </div>`;
 }
