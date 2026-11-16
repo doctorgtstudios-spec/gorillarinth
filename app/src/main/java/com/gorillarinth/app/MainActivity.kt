@@ -1,6 +1,11 @@
 package com.gorillarinth.app
 
 import android.content.Intent
+import android.app.AlertDialog
+import android.app.PendingIntent
+import android.content.pm.PackageInstaller
+import android.widget.EditText
+import android.text.InputType
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.JavascriptInterface
@@ -434,7 +439,135 @@ class MainActivity : ComponentActivity() {
             .put("appliedAt", if (appliedModId != null) prefs.getLong("appliedAt", 0L).takeIf { it > 0L } ?: JSONObject.NULL else JSONObject.NULL)
             .put("capacity", 0).put("used", 0)
             .put("pending", pending).put("canApply", connected && baseUsable && pending)
+            .put("qmodGameVersionMatch", runCatching {
+                JSONObject(getSharedPreferences("qmod", MODE_PRIVATE).getString("lastGameVersionMatch", "{}") ?: "{}")
+            }.getOrDefault(JSONObject()))
+            .put("stagedApk", File(filesDir, "gorilla_tag_download.apk").let { it.exists() && it.length() > 0L })
             .put("version", "0.1.0")
+    }
+
+    private fun downloadMatchedBuild(accessToken: String): String {
+        require(accessToken.matches(Regex("[A-Za-z0-9._-]{20,512}"))) {
+            "That Meta access token does not look valid. Generate a fresh Oculus platform utility token in Meta Developer Dashboard."
+        }
+        val plan = JSONObject(getSharedPreferences("qmod", MODE_PRIVATE)
+            .getString("lastGameVersionMatch", "{}") ?: "{}")
+        require(plan.optString("status") == "download") { "Import a QMOD with a specific Gorilla Tag packageVersion first." }
+        val versionId = plan.optString("versionId")
+        require(versionId.matches(Regex("[0-9]+"))) { "The matched OculusDB build ID is invalid." }
+        val downloadUrl = "https://securecdn.oculus.com/binaries/download/?id=" +
+            java.net.URLEncoder.encode(versionId, "UTF-8") + "&access_token=" +
+            java.net.URLEncoder.encode(accessToken, "UTF-8")
+        val temp = File(filesDir, "gorilla_tag_download.apk.tmp")
+        val staged = File(filesDir, "gorilla_tag_download.apk")
+        val connection = java.net.URL(downloadUrl).openConnection().apply {
+            connectTimeout = 20000
+            readTimeout = 60000
+            setRequestProperty("User-Agent", "GorillaRinth/0.1")
+            setRequestProperty("Accept", "application/vnd.android.package-archive, application/octet-stream")
+        }
+        val http = connection as? java.net.HttpURLConnection
+        try {
+            if (http != null) require(http.responseCode in 200..299) {
+                "Meta download failed (HTTP ${http.responseCode}). Check that your token is current and your account owns Gorilla Tag."
+            }
+            var total = 0L
+            connection.getInputStream().use { input ->
+                FileOutputStream(temp).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        require(total <= 1500L * 1024 * 1024) { "Downloaded APK is larger than the 1.5 GB safety limit." }
+                        output.write(buffer, 0, count)
+                    }
+                    output.fd.sync()
+                }
+            }
+            require(total > 1024L * 1024) { "Meta returned an empty or incomplete APK download." }
+            val info = packageManager.getPackageArchiveInfo(temp.absolutePath, 0)
+                ?: error("Meta did not return a valid APK. The token may have expired or the build may be unavailable.")
+            require(info.packageName == "com.AnotherAxiom.GorillaTag") {
+                "Downloaded package ${info.packageName}; expected Gorilla Tag."
+            }
+            val expected = plan.optString("targetVersion")
+            val actual = info.versionName.orEmpty()
+            require(actual.equals(expected, ignoreCase = true)) {
+                "Downloaded Gorilla Tag version $actual, but this QMOD requires $expected. The APK was not installed."
+            }
+            val backup = File(filesDir, "gorilla_tag_download.apk.previous")
+            if (staged.exists()) {
+                backup.delete()
+                check(staged.renameTo(backup)) { "Could not preserve the previous APK download." }
+            }
+            if (!temp.renameTo(staged)) {
+                if (backup.exists()) backup.renameTo(staged)
+                error("Could not save the downloaded Gorilla Tag APK.")
+            }
+            backup.delete()
+            return JSONObject().put("packageName", info.packageName)
+                .put("versionName", actual).put("size", staged.length()).toString()
+        } catch (e: Exception) {
+            temp.delete()
+            throw e
+        } finally {
+            http?.disconnect()
+        }
+    }
+
+    private fun startPackageInstall(apk: File): String {
+        require(apk.exists() && apk.length() > 0L) { "No downloaded Gorilla Tag APK is available." }
+        val info = packageManager.getPackageArchiveInfo(apk.absolutePath, 0)
+            ?: error("The staged file is not a valid APK.")
+        require(info.packageName == "com.AnotherAxiom.GorillaTag") { "Only a Gorilla Tag APK can be installed here." }
+        val installer = packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        params.setAppPackageName(info.packageName)
+        val sessionId = installer.createSession(params)
+        try {
+            installer.openSession(sessionId).use { session ->
+                session.openWrite("gorilla-tag.apk", 0, apk.length()).use { output ->
+                    apk.inputStream().use { input -> input.copyTo(output) }
+                    session.fsync(output)
+                }
+                val callback = Intent(this, ApkInstallReceiver::class.java)
+                    .setAction(ApkInstallReceiver.ACTION_INSTALL_RESULT)
+                val pending = PendingIntent.getBroadcast(
+                    this, sessionId, callback,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                )
+                session.commit(pending.intentSender)
+            }
+        } catch (e: Exception) {
+            runCatching { installer.abandonSession(sessionId) }
+            throw e
+        }
+        return "Android package installer opened for Gorilla Tag ${info.versionName ?: "APK"}."
+    }
+
+    private fun promptForMetaToken(id: Int) {
+        val input = EditText(this).apply {
+            hint = "Oculus platform utility token"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            singleLine = true
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Download matched Gorilla Tag build")
+            .setMessage("Sign in at Meta Developer Dashboard, then open Account settings → Get Oculus platform utility token. Paste that token here. GorillaRinth uses it only for this download and does not save it.")
+            .setView(input)
+            .setNegativeButton("Cancel") { _, _ -> complete(id, false, "Download cancelled.") }
+            .setPositiveButton("Download") { _, _ ->
+                val token = input.text?.toString()?.trim().orEmpty()
+                onIo(id) {
+                    val result = JSONObject(downloadMatchedBuild(token))
+                    runOnUiThread { runCatching { startPackageInstall(File(filesDir, "gorilla_tag_download.apk")) }
+                        .onFailure { Toast.makeText(this, it.message ?: "Could not open installer.", Toast.LENGTH_LONG).show() } }
+                    result.put("installerStarted", true).toString()
+                }
+            }
+            .setOnCancelListener { complete(id, false, "Download cancelled.") }
+            .show()
     }
 
     private fun resolveQmodGameVersion(manifest: JSONObject): JSONObject {
@@ -573,6 +706,8 @@ class MainActivity : ComponentActivity() {
                         runOnUiThread { startActivity(intent) }
                         complete(id, true, "true")
                     }
+                    "downloadMatchedApk" -> runOnUiThread { promptForMetaToken(id) }
+                    "installImportedApk" -> onIo(id) { startPackageInstall(File(filesDir, "gorilla_tag_download.apk")) }
                     "importDownloadedApk" -> runOnUiThread {
                         pendingApkImportId = id
                         apkPicker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream"))
