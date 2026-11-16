@@ -502,6 +502,7 @@ class MainActivity : ComponentActivity() {
                     if (parsed.has(key) && !parsed.isNull(key)) parsed.put(key, gameUnityVersion)
                 }
             }
+            parsed.writeTo(modJson ?: File(temp, "manifest.json"))
             val modName = parsed.optString("name").trim()
             require(modName.isNotEmpty()) { "The mod manifest must contain a name." }
             val modId = parsed.optString("id", modName).trim()
