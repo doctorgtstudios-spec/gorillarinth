@@ -121,19 +121,15 @@ class MainActivity : ComponentActivity() {
                             val developerSettings = Intent("android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
                                 .setPackage("com.android.settings")
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            val androidSettings = Intent(android.provider.Settings.ACTION_SETTINGS)
-                                .setPackage("com.android.settings")
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             try {
-                                if (developerSettings.resolveActivity(packageManager) != null) {
-                                    startActivity(developerSettings)
-                                } else if (androidSettings.resolveActivity(packageManager) != null) {
-                                    startActivity(androidSettings)
-                                } else {
-                                    startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
-                                }
+                                startActivity(developerSettings)
                             } catch (_: Exception) {
-                                startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
+                                try {
+                                    startActivity(Intent("android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                } catch (_: Exception) {
+                                    Toast.makeText(this@MainActivity, "Android Developer options are unavailable on this device.", Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
                         complete(id, true, "true")
