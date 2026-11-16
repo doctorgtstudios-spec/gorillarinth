@@ -18,11 +18,18 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 
 class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
     private lateinit var mdns: KadbMdnsAndroid
     @Volatile private var adbClient: Kadb? = null
+    private val adbScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pendingImportId: Int? = null
     private var importedManifest: JSONObject? = null
 
@@ -47,6 +54,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         mdns = KadbMdnsAndroid(applicationContext)
         mdns.start()
+        adbScope.launch {
+            mdns.state.collect { discovered ->
+                val prefs = getSharedPreferences("device", MODE_PRIVATE)
+                val savedHost = prefs.getString("host", null)
+                val endpoint = discovered.connectDevices.firstOrNull { savedHost == null || it.host == savedHost }
+                if (prefs.getBoolean("autoReconnect", false) && endpoint != null && adbClient?.connectionCheck() != true) {
+                    runCatching { connectTo(endpoint.host, endpoint.port) }
+                }
+            }
+        }
         web = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -63,6 +80,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         runCatching { adbClient?.close() }
         runCatching { mdns.close() }
+        adbScope.cancel()
         super.onDestroy()
     }
 
@@ -224,7 +242,7 @@ class MainActivity : ComponentActivity() {
                         complete(id, true, enabled.toString())
                     }
                     "storeConfig" -> complete(id, true, JSONObject().put("url", "").put("configured", false).toString())
-                    "pair", "pullBase", "chooseBase", "restoreBase", "stopGame", "apply", "storeSetUrl", "storeInstall" ->
+                    "pullBase", "chooseBase", "restoreBase", "stopGame", "apply", "storeSetUrl", "storeInstall" ->
                         throw UnsupportedOperationException(when (method) {
                             "apply" -> "OBB patching needs a supported mod patch layout; no patch format is defined in the imported mod manifest yet."
                             "storeSetUrl", "storeInstall" -> "The GorillaRinth server catalog is not connected yet."
