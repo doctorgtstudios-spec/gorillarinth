@@ -347,7 +347,7 @@ function updateDiscover() {
   filters.hidden = !store.configured;
   if (!store.configured) {
     count.textContent = '';
-    setHtml(list, `<div class="card empty" style="margin-top:14px">${ic('store').replace('class="i"', 'class="i big"')}<h3>No mod store added</h3><p>Add the address of a store's manifest in Settings to browse its mods here. You can always upload mod archives directly.</p><div class="row"><button class="btn line" data-upload="1">${ic('folder')}Upload mods</button><button class="btn primary" data-settings="store">Add a store</button></div></div>`);
+    setHtml(list, `<div class="card empty" style="margin-top:14px">${ic('store').replace('class="i"', 'class="i big"')}<h3>No QMOD provider configured</h3><p>GorillaRinth loads .qmod archives from the configured GitHub repository. Change the provider in Settings if needed.</p><div class="row"><button class="btn line" data-upload="1">${ic('folder')}Upload mods</button><button class="btn primary" data-settings="store">Add a store</button></div></div>`);
     return;
   }
   if (store.error) { count.textContent = ''; setHtml(list, `<div class="card empty" style="margin-top:14px"><h3>Could not load the store</h3><p>${esc(store.error)}</p><div class="row"><button class="btn line" data-settings="store">Store settings</button><button class="btn primary" data-refresh="1">Try again</button></div></div>`); return; }
